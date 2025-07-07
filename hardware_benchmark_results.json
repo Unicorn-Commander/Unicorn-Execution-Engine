@@ -1,0 +1,92 @@
+{
+  "results": [
+    {
+      "method": "ROCm",
+      "operation": "MatMul_1024x1024",
+      "throughput_ops_sec": 0,
+      "latency_ms": 0,
+      "memory_mb": 0,
+      "power_w": null,
+      "success": false,
+      "error": "ROCM_ERROR,HIP error: invalid device function\nHIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing AMD_SERIALIZE_KERNEL=3\nCompile with `TORCH_USE_HIP_DSA` to enable device-side assertions."
+    },
+    {
+      "method": "ROCm",
+      "operation": "MatMul_2048x2048",
+      "throughput_ops_sec": 0,
+      "latency_ms": 0,
+      "memory_mb": 0,
+      "power_w": null,
+      "success": false,
+      "error": "ROCM_ERROR,HIP error: invalid device function\nHIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing AMD_SERIALIZE_KERNEL=3\nCompile with `TORCH_USE_HIP_DSA` to enable device-side assertions."
+    },
+    {
+      "method": "Vulkan",
+      "operation": "Compute_Check",
+      "throughput_ops_sec": 0,
+      "latency_ms": 0,
+      "memory_mb": 0,
+      "power_w": null,
+      "success": false,
+      "error": "Vulkan not available"
+    },
+    {
+      "method": "NPU_Simulated",
+      "operation": "Attention_512x2048",
+      "throughput_ops_sec": 0.7073048673145699,
+      "latency_ms": 1413.8175010681152,
+      "memory_mb": 0,
+      "power_w": null,
+      "success": true,
+      "error": "Simulation only - needs MLIR-AIE implementation"
+    },
+    {
+      "method": "Quantization_AWQ",
+      "operation": "4096x4096_weights",
+      "throughput_ops_sec": 4.467020040492082,
+      "latency_ms": 223.862886428833,
+      "memory_mb": 16.0,
+      "power_w": null,
+      "success": true,
+      "error": "Compression: 4.0x, Simulation only"
+    },
+    {
+      "method": "Quantization_GPTQ",
+      "operation": "4096x4096_weights",
+      "throughput_ops_sec": 4.56756047440816,
+      "latency_ms": 218.9352512359619,
+      "memory_mb": 16.0,
+      "power_w": null,
+      "success": true,
+      "error": "Compression: 4.0x, Simulation only"
+    },
+    {
+      "method": "Quantization_GGUF_Q4_K_M",
+      "operation": "4096x4096_weights",
+      "throughput_ops_sec": 4.66039991644333,
+      "latency_ms": 214.57386016845703,
+      "memory_mb": 16.0,
+      "power_w": null,
+      "success": true,
+      "error": "Compression: 4.0x, Simulation only"
+    },
+    {
+      "method": "Quantization_Custom_Q4",
+      "operation": "4096x4096_weights",
+      "throughput_ops_sec": 4.764262217618087,
+      "latency_ms": 209.89608764648438,
+      "memory_mb": 16.0,
+      "power_w": null,
+      "success": true,
+      "error": "Compression: 4.0x, Simulation only"
+    }
+  ],
+  "analysis": {
+    "rocm_available": false,
+    "npu_available": true,
+    "vulkan_available": false,
+    "best_igpu_method": "Unknown",
+    "best_quantization": "Quantization_Custom_Q4",
+    "recommended_strategy": "CPU_Fallback"
+  }
+}
