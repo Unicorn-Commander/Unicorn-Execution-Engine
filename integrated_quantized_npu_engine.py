@@ -133,7 +133,8 @@ class IntegratedQuantizedNPUEngine:
         else:
             # Use FP16 if quantization disabled
             fp16_weights = {name: weight.to(torch.float16) for name, weight in model_weights.items()}
-            return {"weights": fp16_weights, "summary": {"quantization": "disabled"}}
+            self.quantized_weights = {"weights": fp16_weights, "summary": {"quantization": "disabled"}}
+            return self.quantized_weights
     
     def _load_safetensors_weights(self, model_path: str) -> Dict[str, torch.Tensor]:
         """Load model weights from safetensors files"""
@@ -165,7 +166,7 @@ class IntegratedQuantizedNPUEngine:
     def generate_text_quantized(self, prompt: str, max_tokens: int = 100, 
                                temperature: float = 0.7) -> Dict[str, Any]:
         """Generate text using quantized NPU+iGPU acceleration"""
-        if not self.quantized_weights:
+        if not hasattr(self, 'quantized_weights') or not self.quantized_weights:
             raise RuntimeError("Model not loaded. Call load_and_quantize_model() first.")
         
         logger.info(f"🎯 Generating {max_tokens} tokens with quantized acceleration")
