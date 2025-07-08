@@ -134,8 +134,14 @@ python optimize_gemma3_4b.py
 python optimize_gemma3_27b.py
 ```
 
-### **Real Hardware Testing**
+### **Real Hardware Testing** ✅ **WORKING**
 ```bash
+# Test real Vulkan compute (NEW - BREAKTHROUGH!)
+python real_vulkan_compute.py
+
+# Test integrated engine with real hardware acceleration
+python integrated_quantized_npu_engine.py --test
+
 # Test NPU+iGPU hybrid execution
 python test_real_npu_igpu_performance.py
 
@@ -247,11 +253,12 @@ python performance_optimizer.py --monitor
 - **NPU Turbo**: 30% additional boost
 - **Memory**: 2GB NPU + 8GB iGPU efficient usage
 
-### **Hardware Utilization**
-- **NPU Phoenix**: Attention operations (16 TOPS)
-- **iGPU Radeon 780M**: FFN operations (2.7 TFLOPS)
+### **Hardware Utilization** ✅ **REAL HARDWARE WORKING**
+- **NPU Phoenix**: Attention operations (16 TOPS) - Detection and turbo mode working
+- **iGPU Radeon 780M**: FFN operations (2.7 TFLOPS) - Real Vulkan compute working  
+- **Vulkan Compute**: AMD Radeon Graphics (RADV PHOENIX) - 12 CUs accessible
 - **CPU**: Orchestration and tokenization
-- **Memory**: Intelligent allocation across all devices
+- **Memory**: Real buffer creation and GPU data transfer working
 
 ---
 
