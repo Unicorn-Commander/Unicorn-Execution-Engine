@@ -290,4 +290,4 @@ python optimize_gemma3_4b.py --verbose
 
 ---
 
-*🚀 The Unicorn Execution Engine provides breakthrough performance through custom NPU+iGPU hybrid execution for large language models on AMD Ryzen AI hardware.*
+*🚀 The Unicorn Execution Engine provides breakthrough performance through custom low-level NPU+iGPU hybrid execution, bypassing traditional software stacks for direct hardware control on AMD Ryzen AI hardware.*

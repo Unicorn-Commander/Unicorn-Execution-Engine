@@ -328,4 +328,4 @@ BIOS → Advanced → CPU Configuration → IPU → Enabled
 
 ---
 
-This implementation represents the world's first production-ready hybrid NPU+iGPU execution framework for large language models, achieving breakthrough performance on consumer AMD hardware.
+This implementation represents a novel low-level hybrid NPU+iGPU execution framework for large language models, utilizing custom MLIR-AIE2 NPU programming and Vulkan compute shaders to achieve breakthrough performance on consumer AMD hardware, bypassing traditional software stacks for direct hardware control.

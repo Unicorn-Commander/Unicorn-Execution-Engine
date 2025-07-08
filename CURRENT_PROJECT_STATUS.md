@@ -7,12 +7,20 @@
 
 ## 🎯 **PROJECT OVERVIEW**
 
-The Unicorn Execution Engine is a **custom replacement for Vitis AI** that supports modern AMD Ryzen AI hardware (Phoenix NPU) with breakthrough hybrid execution:
+The Unicorn Execution Engine is a **custom low-level alternative to AMD's official software stack** that supports modern AMD Ryzen AI hardware (Phoenix NPU) with direct hardware programming for breakthrough hybrid execution:
 
 - **Custom NPU Programming**: MLIR-AIE2 for direct Phoenix NPU control
 - **Custom iGPU Programming**: Vulkan compute shaders for Radeon 780M 
 - **Hybrid Architecture**: NPU (attention) + iGPU (FFN) + CPU (orchestration)
 - **Advanced Quantization**: Custom INT4/INT8 optimized for NPU+iGPU split
+
+### **What Makes This Unique**
+Unlike AMD's official Ryzen AI Software stack (DirectML + Vitis AI), the Unicorn Execution Engine provides:
+- **Direct Hardware Access**: MLIR-AIE2 for NPU instead of Vitis AI abstraction
+- **Custom Compute Shaders**: Vulkan for iGPU instead of DirectML
+- **Optimized Quantization**: Custom pipeline designed for the specific hardware split
+- **Lower Latency**: Bypassing software abstraction layers for direct hardware control
+- **Phoenix NPU Support**: Works with current Phoenix generation (official AMD support focuses on newer Strix)
 
 ---
 
@@ -171,4 +179,4 @@ The Unicorn Execution Engine is a **custom replacement for Vitis AI** that suppo
 
 ---
 
-*🎯 The Unicorn Execution Engine represents a breakthrough in consumer AI hardware acceleration, achieving production-ready hybrid NPU+iGPU execution for large language models on AMD Ryzen AI hardware.*
+*🎯 The Unicorn Execution Engine represents an innovative approach to consumer AI hardware acceleration, achieving low-level hybrid NPU+iGPU execution for large language models on AMD Ryzen AI hardware through custom MLIR-AIE2 and Vulkan programming.*
