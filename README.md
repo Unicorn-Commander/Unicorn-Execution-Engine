@@ -1,34 +1,34 @@
 # 🦄 Unicorn Execution Engine
 
-> **🎉 PRODUCTION READY (July 10, 2025)**: Advanced NPU+iGPU Large Language Model Framework Now Operational!
+> **🚧 DEVELOPMENT STATUS (July 10, 2025)**: Advanced NPU+iGPU Framework with Working Gemma 3 27B Implementation
 
-## 🦄 Advanced NPU+iGPU LLM Framework
+## 🦄 NPU+iGPU LLM Framework
 
-The Unicorn Execution Engine demonstrates advanced AI acceleration techniques with production NPU+iGPU large language model capabilities. Our Gemma 3 27B server is now operational with real hardware acceleration.
+The Unicorn Execution Engine demonstrates advanced AI acceleration techniques for AMD Ryzen AI hardware. Currently supports Gemma 3 27B with NPU Phoenix + AMD Radeon 780M acceleration.
 
-### 🎯 **PRODUCTION STATUS**: ✅ **OPERATIONAL** 
+### 🎯 **CURRENT STATUS**: ✅ **Gemma 3 27B Working** 
 
-**Real NPU+iGPU Gemma 3 27B inference server running on port 8009!**
+**Real NPU+iGPU Gemma 3 27B inference achieved with quantized model loading**
 
-## 🚀 **Quick Start - Production Server**
+## 🚀 **Current Working Implementation**
 
 ```bash
 # 1. Activate the environment
 source /home/ucadmin/activate-uc1-ai-py311.sh
 
-# 2. Start the production server
+# 2. Start the Gemma 3 27B server
 python real_2025_gemma27b_server.py
 
-# 3. Server ready on http://localhost:8009
+# 3. Server attempts to start on http://localhost:8009
 # Model: "gemma-3-27b-it-npu-igpu-real"
-# Features: Real NPU+iGPU, OpenAI v1 API, 2025 standards
+# Note: FastAPI server may have stability issues
 ```
 
-### ✅ **OpenWebUI Integration**
-- **URL**: `http://localhost:8009`
-- **Model**: `gemma-3-27b-it-npu-igpu-real`
-- **API**: OpenAI v1 Compatible
-- **Hardware**: Real NPU Phoenix + AMD Radeon 780M
+### ⚠️ **Known Issues**
+- **FastAPI Server**: May experience connection/stability issues
+- **Model Loading**: 26GB quantized model loading works but may be slow
+- **API Compatibility**: OpenAI v1 implementation in progress
+- **Hardware Detection**: NPU Phoenix + AMD Radeon 780M detection working
 
 #### ✅ **🦄 Unicorn Quantization Engine** - PRODUCTION READY
 - **⚡ 30-second quantization** for 27B models (102GB → 31GB)
@@ -36,20 +36,18 @@ python real_2025_gemma27b_server.py
 - **16-core parallel processing** with ThreadPoolExecutor
 - **Multi-model support** for Gemma 3 series and Qwen models
 
-#### ✅ **Multi-Model Support** - QUANTIZED + READY
-- **Gemma 3 4B**: Complete optimization with 400+ TPS theoretical
-- **Gemma 3 27B**: 27.4B parameters quantized (31GB), 80-120 TPS expected
-- **Gemma 3n E2B**: MatFormer with elastic parameter scaling (1.91B→5B)
-- **Gemma 3n E4B**: MatFormer with elastic parameter scaling (3.8B→9B)
-- **Qwen 2.5 7B**: Production-ready with OpenAI API compatibility
-- **Future**: Qwen 3 32B planned for next phase
+#### 🎯 **Model Support Status**
+- **Gemma 3 27B**: ✅ **Working** - 26GB quantized model loads and runs
+- **Gemma 3 4B**: 🚧 **In Development** - Quantization complete, integration pending
+- **Qwen 2.5 7B**: 🚧 **In Development** - Framework exists, needs integration
+- **Other Models**: ⏳ **Future** - MatFormer variants planned
 
-#### ✅ **Production Infrastructure** - COMPLETE
-- **OpenAI v1 API** server ready for deployment
-- **Real hardware integration** (NPU Phoenix + AMD RDNA3)
-- **Comprehensive documentation** and handoff guides
-- **32K Context** length for complex conversations
-- **Hybrid Architecture** optimized for larger model (2GB NPU + 12GB iGPU)
+#### 🔧 **Technical Infrastructure**
+- **Hardware Integration**: NPU Phoenix + AMD Radeon 780M detection working
+- **Quantization Engine**: 30-second quantization for 27B models (102GB → 26GB)
+- **Model Loading**: Layer-by-layer streaming for large models
+- **API Framework**: OpenAI v1 structure implemented (stability issues remain)
+- **Memory Management**: HMA optimization for 96GB DDR5 + 16GB VRAM
 
 ## 🏗️ Architecture
 
@@ -101,72 +99,74 @@ python run_gemma3n_e2b.py --benchmark --prompt "Benchmark test"
 python validate_performance.py
 ```
 
-## 📊 Performance Results
+## 📊 Current Performance Status
 
-### Achieved Performance
-| Metric | Target | Achieved | Status |
-|--------|--------|----------|--------|
-| Tokens per Second | 40-80 | 76.2-93.1 | ✅ Exceeded |
-| Time to First Token | 20-40ms | 9.4-589ms | ⚠️ Optimizing |
-| NPU Utilization | >70% | Optimized | ✅ Achieved |
-| iGPU Utilization | >80% | Optimized | ✅ Achieved |
-| Memory Efficiency | <10GB | 10GB budget | ✅ Within limits |
+### Gemma 3 27B Performance (Measured)
+| Metric | Status | Notes |
+|--------|--------|-------|
+| Model Loading | ✅ Working | 26GB quantized model loads successfully |
+| NPU Detection | ✅ Working | NPU Phoenix detected and accessible |
+| iGPU Detection | ✅ Working | AMD Radeon 780M detected via Vulkan |
+| Inference Speed | 🐌 Slow | ~36 seconds per transformer layer |
+| API Server | ⚠️ Unstable | FastAPI connection issues |
+| Memory Usage | ✅ Efficient | Progressive loading, ~8GB peak RAM |
 
-### Hardware Utilization
-- **NPU Phoenix**: 16 TOPS optimized for attention operations
-- **iGPU Radeon 780M**: RDNA3 architecture for decode processing
-- **Memory Management**: Intelligent allocation across 2GB NPU + 8GB iGPU + 96GB system RAM
+### Current Limitations
+- **Performance**: Inference is significantly slower than targets
+- **FastAPI Issues**: Server stability problems affecting API responses
+- **Model Support**: Only Gemma 3 27B fully working
+- **Optimization**: Need better batching and memory transfer optimization
 
-## 🧠 Advanced Features
+## 🧠 Technical Achievements
 
-### MatFormer Architecture Support
-- **Elastic Parameters**: Dynamic scaling from 1.91B to 5B parameters
-- **Mix-n-Match**: Runtime model complexity adaptation
-- **Layer Selection**: Intelligent parameter activation for E2B mode
-- **Memory Optimization**: Per-Layer Embeddings (PLE) for efficient storage
+### ✅ Working Features
+- **Hardware Detection**: NPU Phoenix + AMD Radeon 780M identification
+- **Model Quantization**: 30-second quantization (102GB → 26GB) 
+- **Model Loading**: Layer-by-layer streaming for large models
+- **Memory Management**: HMA-optimized allocation across NPU/iGPU/CPU
+- **Vulkan Integration**: Direct iGPU compute shader access
+- **MLIR-AIE2 Framework**: NPU kernel compilation infrastructure
 
-### Hybrid Execution Engine
-- **Asynchronous Processing**: Parallel NPU+iGPU operations
-- **Memory Pooling**: Pre-allocated tensor pools for zero-copy transfers
-- **Performance Monitoring**: Real-time metrics and optimization suggestions
-- **Thermal Management**: Dynamic load balancing based on system temperature
+### 🚧 In Development
+- **FastAPI Server**: Stability improvements needed
+- **Performance Optimization**: Batching and memory transfer improvements
+- **Multi-Model Support**: Extending beyond Gemma 3 27B
+- **API Compliance**: Full OpenAI v1 compatibility
 
-### Production Features
-- **Error Handling**: Comprehensive fallback mechanisms (NPU→CPU, iGPU→CPU)
-- **Logging**: Detailed performance and diagnostic information
-- **Configuration**: Flexible hardware and model parameter tuning
-- **Benchmarking**: Built-in performance testing and validation
+### 📋 Planned Features
+- **MatFormer Support**: Elastic parameter scaling
+- **Advanced Orchestration**: Async NPU+iGPU operations
+- **Performance Monitoring**: Real-time metrics dashboard
+- **Production Deployment**: Stable API server with load balancing
 
 ## 📁 Project Structure
 
 ```
 Unicorn-Execution-Engine/
-├── 🧠 Core Implementation
-│   ├── qwen25_loader.py               # Qwen2.5 model loader (✅ Complete, NPUAttentionModule merged)
-│   ├── hybrid_orchestrator.py         # NPU+iGPU coordinator 
-│   ├── openai_api_server.py          # OpenAI v1 compatible API server
-│   ├── performance_optimizer.py       # Advanced optimizations
-│   ├── run_qwen25.py                 # Qwen2.5 execution interface
-│   └── validate_performance.py        # Performance testing
+├── 🦄 Working Implementation
+│   ├── real_2025_gemma27b_server.py          # ✅ Gemma 3 27B server (stability issues)
+│   ├── quantized_gemma27b_npu_igpu_loader.py # ✅ 26GB model loader
+│   ├── vulkan_ffn_compute_engine.py          # ✅ iGPU Vulkan acceleration
+│   ├── npu_attention_kernel_real.py          # ✅ NPU Phoenix integration
+│   └── unicorn_quantization_engine.py        # ✅ 30-second quantization
 │
-├── 🔧 NPU Development Toolkit
-│   ├── npu_kernels/                   # NPU kernel development (🚧 In Progress)
-│   │   └── Qwen25-Attention/          # Qwen2.5 NPU Attention Kernel Submodule
-│   │       ├── README.md              # Development plan and interfaces
-│   │       └── npu_attention_module.py # Placeholder for NPU-accelerated attention
-│   ├── NPU-Development/               # Complete NPU development environment
-│   │   ├── documentation/             # Comprehensive guides
-│   │   ├── scripts/                   # Installation and verification
-│   │   └── README.md                  # NPU toolkit documentation
-│   └── xdna-driver/                   # AMD XDNA driver source
+├── 🔧 Hardware Framework
+│   ├── real_vulkan_matrix_compute.py         # ✅ Vulkan compute verification
+│   ├── advanced_hardware_tuner.py            # ✅ Hardware detection/tuning
+│   ├── hma_zero_copy_optimization.py         # ✅ Memory optimization
+│   └── NPU-Development/                       # ✅ NPU toolkit and docs
 │
-├── 📊 Documentation & Analysis
-│   ├── IMPLEMENTATION_SUMMARY.md      # Detailed implementation guide
-│   ├── gemma3b-npu-project.md        # Original project specification
-│   └── GEMMA_3B_NPU_OPTIMIZATION_PLAN.md # Optimization strategy
+├── 🚧 Development & Testing
+│   ├── qwen25_loader.py                       # 🚧 Qwen2.5 support (in progress)
+│   ├── openai_api_server.py                  # 🚧 API server (needs stability fixes)
+│   ├── performance_optimizer.py               # 🚧 Performance improvements
+│   └── test_*.py                              # Various testing scripts
 │
-└── ⚙️ Environment
-    └── gemma3n_env/                   # Python virtual environment
+├── 📚 Documentation
+│   ├── README.md                              # This file
+│   ├── CLAUDE.md                              # Technical documentation
+│   ├── UNICORN_QUANTIZATION_ENGINE.md        # Quantization guide
+│   └── PROJECT_HANDOFF_SUMMARY.md            # Technical handoff guide
 ```
 
 ## 🛠️ Development Workflow
@@ -241,23 +241,34 @@ python run_gemma3n_e2b.py --prompt "Your prompt here" --max-tokens 200 --tempera
 
 ## 🔧 Troubleshooting
 
+### Known Issues
+1. **FastAPI Server Instability**: Server may drop connections or become unresponsive
+   - **Workaround**: Restart server if connections fail
+   - **Status**: Under investigation
+2. **Slow Inference**: ~36 seconds per transformer layer (needs optimization)
+3. **Model Support**: Only Gemma 3 27B fully functional currently
+
 ### Common Issues
 1. **NPU Not Detected**: Check BIOS IPU setting and kernel version
-2. **Performance Below Target**: Verify turbo mode and thermal throttling
-3. **Memory Issues**: Adjust NPU/iGPU memory budgets
-4. **Import Errors**: Ensure virtual environment is activated
+2. **Memory Issues**: Ensure 32GB+ RAM for 26GB model loading
+3. **Import Errors**: Ensure virtual environment is activated
+4. **API Connection Failed**: Try restarting the server
 
 ### Debug Commands
 ```bash
-# NPU status
+# Check hardware status
 xrt-smi examine
 lsmod | grep amdxdna
+vulkaninfo --summary
 
-# iGPU status  
-rocm-smi --showuse
+# Test model loading
+python quantized_gemma27b_npu_igpu_loader.py
 
-# System verification
-./NPU-Development/scripts/verify_npu_setup.sh
+# Test server manually
+python real_2025_gemma27b_server.py
+
+# Check logs for errors
+tail -f *.log
 ```
 
 ## 🤝 Contributing
