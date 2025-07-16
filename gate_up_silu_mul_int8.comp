@@ -1,0 +1,97 @@
+#version 450
+
+// Enable INT8 and FP16 extensions
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+#extension GL_EXT_shader_8bit_storage : enable
+
+// Fused Gate-Up-SiLU-Mul operation for INT8 quantized weights
+// Optimized for RDNA3 with native INT8 support
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Push constants
+layout(push_constant) uniform PushConstants {
+    uint batch_seq_len;  // batch_size * seq_len (flattened)
+    uint hidden_size;    // input dimension
+    uint intermediate_size;  // FFN intermediate dimension
+} pc;
+
+// Input buffer (FP32 activations)
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    float input_data[];
+};
+
+// INT8 weight buffers
+layout(std430, binding = 1) readonly buffer GateWeightBuffer {
+    int8_t gate_weight[];  // [intermediate_size, hidden_size]
+};
+
+layout(std430, binding = 2) readonly buffer UpWeightBuffer {
+    int8_t up_weight[];    // [intermediate_size, hidden_size]
+};
+
+// Scale factors for dequantization
+layout(std430, binding = 3) readonly buffer GateScale {
+    float gate_scale[];  // Per-channel or per-tensor
+};
+
+layout(std430, binding = 4) readonly buffer UpScale {
+    float up_scale[];    // Per-channel or per-tensor
+};
+
+// Output buffer
+layout(std430, binding = 5) writeonly buffer OutputBuffer {
+    float output_data[];
+};
+
+// SiLU activation function
+float silu(float x) {
+    return x / (1.0 + exp(-x));
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    
+    if (idx >= pc.batch_seq_len * pc.intermediate_size) {
+        return;
+    }
+    
+    // Calculate position in output
+    uint batch_pos = idx / pc.intermediate_size;
+    uint out_idx = idx % pc.intermediate_size;
+    
+    // Compute gate and up projections using INT8 weights
+    int gate_acc = 0;
+    int up_acc = 0;
+    
+    // INT8 matrix multiplication with FP32 input
+    for (uint i = 0; i < pc.hidden_size; ++i) {
+        float input_val = input_data[batch_pos * pc.hidden_size + i];
+        
+        // Quantize input to INT8 for multiplication (dynamic quantization)
+        // For better accuracy, you might want to use a proper quantization scale
+        int8_t input_int8 = int8_t(clamp(input_val * 127.0 / 4.0, -128.0, 127.0));
+        
+        // INT8 multiply-accumulate
+        int8_t gate_w = gate_weight[out_idx * pc.hidden_size + i];
+        int8_t up_w = up_weight[out_idx * pc.hidden_size + i];
+        
+        gate_acc += int(input_int8) * int(gate_w);
+        up_acc += int(input_int8) * int(up_w);
+    }
+    
+    // Dequantize results
+    float gate_scale_val = gate_scale[0];  // Per-tensor scale for now
+    float up_scale_val = up_scale[0];      // Per-tensor scale for now
+    float input_scale = 4.0 / 127.0;       // Input quantization scale
+    
+    float gate_result = float(gate_acc) * gate_scale_val * input_scale;
+    float up_result = float(up_acc) * up_scale_val * input_scale;
+    
+    // Apply SiLU to gate and multiply with up
+    float result = silu(gate_result) * up_result;
+    
+    // Store result
+    output_data[idx] = result;
+}

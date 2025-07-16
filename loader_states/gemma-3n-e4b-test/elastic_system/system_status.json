@@ -1,0 +1,19 @@
+{
+  "system_active": true,
+  "total_parameters": 168,
+  "active_parameters": 60,
+  "inactive_parameters": 108,
+  "activating_parameters": 0,
+  "deactivating_parameters": 0,
+  "memory_usage": {
+    "npu_phoenix": 283115520,
+    "radeon_780m": 0,
+    "system_memory": 0
+  },
+  "recent_decisions": 60,
+  "recent_metrics": 12,
+  "current_load": 0.830013500309367,
+  "memory_pressure": 0.002690529336734694,
+  "response_time": 143.48418656216427,
+  "throughput": 27.911146080801817
+}

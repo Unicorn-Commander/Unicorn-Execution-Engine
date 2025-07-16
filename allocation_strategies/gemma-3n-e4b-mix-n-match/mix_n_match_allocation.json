@@ -1,0 +1,1108 @@
+{
+  "npu_phoenix": {
+    "base_layers": [
+      {
+        "layer_id": 4,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 5,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 6,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 7,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 8,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 9,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 10,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 11,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 0,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 1,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 2,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      }
+    ],
+    "elastic_layers": [
+      {
+        "layer_id": 0,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 1,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 2,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 3,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 20,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 21,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 22,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 23,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      }
+    ],
+    "memory_used": 2139095040,
+    "compute_used": 2063597568,
+    "utilization": 0.5691261291503906
+  },
+  "radeon_780m": {
+    "base_layers": [
+      {
+        "layer_id": 3,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 20,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 21,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 22,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 23,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 4,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 5,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 6,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 7,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 8,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 9,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 10,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 11,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 12,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 12,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 13,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 13,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 14,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 14,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 15,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 15,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 16,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 16,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 17,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 17,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 18,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 18,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 19,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 19,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      }
+    ],
+    "elastic_layers": [
+      {
+        "layer_id": 4,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 5,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 6,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 7,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 8,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 9,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 10,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 11,
+        "layer_type": "attention",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 12,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 13,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 14,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 15,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 16,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 17,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 18,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 19,
+        "layer_type": "attention",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 0,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 1,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 2,
+        "layer_type": "ffn",
+        "hardware_target": "npu_phoenix",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 3,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 20,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 21,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 22,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 23,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 4,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 5,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 6,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 7,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 8,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 9,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 10,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 11,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 12,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 13,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 14,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 15,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 16,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 17,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 18,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      },
+      {
+        "layer_id": 19,
+        "layer_type": "ffn",
+        "hardware_target": "radeon_780m",
+        "memory_requirement": 75497472,
+        "compute_requirement": 75497472,
+        "elastic_support": true,
+        "priority": 2
+      }
+    ],
+    "memory_used": 3498049536,
+    "compute_used": 3422552064,
+    "utilization": 1.1102430555555554
+  },
+  "system_memory": {
+    "base_layers": [
+      {
+        "layer_id": 0,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 1,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 2,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 3,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 20,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 21,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 22,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 23,
+        "layer_type": "attention",
+        "hardware_target": "system_memory",
+        "memory_requirement": 239075328,
+        "compute_requirement": 229638144,
+        "elastic_support": true,
+        "priority": 1
+      },
+      {
+        "layer_id": 0,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 1,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 2,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 3,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 20,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 21,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 22,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 23,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 4,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 5,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 6,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 7,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 8,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 9,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 10,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 11,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 12,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 13,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 14,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 15,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 16,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 17,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 18,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      },
+      {
+        "layer_id": 19,
+        "layer_type": "layernorm",
+        "hardware_target": "system_memory",
+        "memory_requirement": 6144,
+        "compute_requirement": 100663296,
+        "elastic_support": false,
+        "priority": 2
+      }
+    ],
+    "elastic_layers": [],
+    "memory_used": 1912750080,
+    "compute_used": 4253024256,
+    "utilization": 0.0
+  }
+}

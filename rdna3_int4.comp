@@ -1,0 +1,128 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+// RDNA3 INT4 Optimized Matrix Multiply
+// - Wave32 mode for AMD 780M
+// - INT4 weights (2 per byte)
+// - FP16 activations
+// - Optimized for 2x memory efficiency
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+// Buffers
+layout(binding = 0) readonly buffer InputA {
+    float16_t dataA[];  // Activations in FP16
+};
+
+layout(binding = 1) readonly buffer InputB {
+    uint8_t dataB[];    // INT4 weights packed (2 per byte)
+};
+
+layout(binding = 2) writeonly buffer Output {
+    float16_t dataC[];  // Output in FP16
+};
+
+layout(binding = 3) readonly buffer Scales {
+    float16_t scales[]; // Quantization scales
+};
+
+layout(binding = 4) readonly buffer Zeros {
+    float16_t zeros[];  // Quantization zero points
+};
+
+// Push constants
+layout(push_constant) uniform PushConstants {
+    uint M;  // Rows of A
+    uint N;  // Cols of B  
+    uint K;  // Cols of A / Rows of B
+} params;
+
+// Shared memory for cooperative loading
+shared float16_t tileA[32][33];  // 33 to avoid bank conflicts
+shared int8_t tileB[32][64];     // Unpacked INT4 values
+
+// Unpack INT4 weights from packed format
+void unpackInt4(uint8_t packed, out int8_t low, out int8_t high) {
+    // Low 4 bits
+    uint lowBits = uint(packed) & 0x0Fu;
+    low = int8_t(lowBits);
+    if (lowBits >= 8u) low = int8_t(lowBits - 16u);  // Sign extend
+    
+    // High 4 bits  
+    uint highBits = uint(packed) >> 4u;
+    high = int8_t(highBits);
+    if (highBits >= 8u) high = int8_t(highBits - 16u);  // Sign extend
+}
+
+void main() {
+    const uint tx = gl_LocalInvocationID.x;
+    const uint bx = gl_WorkGroupID.x;
+    const uint by = gl_WorkGroupID.y;
+    
+    // Calculate output position
+    const uint row = by * 32 + tx;
+    const uint colBase = bx * 64;  // Process 64 columns (32 INT4 pairs)
+    
+    // Accumulator for 2 outputs per thread
+    float acc[2] = float[2](0.0, 0.0);
+    
+    // Main computation loop
+    for (uint k = 0; k < params.K; k += 32) {
+        // Cooperatively load tile A (activations)
+        if (row < params.M && k + tx < params.K) {
+            tileA[tx][gl_LocalInvocationID.y] = dataA[row * params.K + k + tx];
+        } else {
+            tileA[tx][gl_LocalInvocationID.y] = float16_t(0.0);
+        }
+        
+        // Cooperatively load and unpack tile B (INT4 weights)
+        barrier();
+        
+        // Each thread loads one packed byte (2 INT4 values)
+        if (k + tx < params.K && colBase + gl_LocalInvocationID.y * 2 < params.N) {
+            uint packedIdx = ((k + tx) * params.N + colBase) / 2 + gl_LocalInvocationID.y;
+            uint8_t packed = dataB[packedIdx];
+            
+            int8_t low, high;
+            unpackInt4(packed, low, high);
+            
+            tileB[tx][gl_LocalInvocationID.y * 2] = low;
+            tileB[tx][gl_LocalInvocationID.y * 2 + 1] = high;
+        }
+        
+        barrier();
+        
+        // Compute partial dot products
+        for (uint kk = 0; kk < 32; ++kk) {
+            float16_t a = tileA[tx][kk];
+            
+            // Process 2 columns
+            for (uint c = 0; c < 2; ++c) {
+                uint colIdx = gl_SubgroupInvocationID + c * 32;
+                if (colBase + colIdx < params.N) {
+                    int8_t b = tileB[kk][colIdx];
+                    float16_t scale = scales[colBase + colIdx];
+                    float16_t zero = zeros[colBase + colIdx];
+                    
+                    // Dequantize and accumulate
+                    acc[c] += float(a) * (float(b) - float(zero)) * float(scale);
+                }
+            }
+        }
+        
+        barrier();
+    }
+    
+    // Write results
+    if (row < params.M) {
+        for (uint c = 0; c < 2; ++c) {
+            uint col = colBase + gl_SubgroupInvocationID + c * 32;
+            if (col < params.N) {
+                uint outIdx = row * params.N + col;
+                dataC[outIdx] = float16_t(acc[c]);
+            }
+        }
+    }
+}

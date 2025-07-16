@@ -1,0 +1,16 @@
+{
+  "test_metadata": {
+    "model": "Gemma 3 27B",
+    "test_duration_seconds": 7.588428497314453,
+    "npu_device": "Phoenix 16 TOPS",
+    "test_timestamp": 1752110298.5712233
+  },
+  "single_sequence": {
+    "complete_kernel": {},
+    "modular_kernels": {}
+  },
+  "scaling_performance": {
+    "complete_kernel": [],
+    "modular_kernels": []
+  }
+}

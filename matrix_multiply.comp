@@ -1,0 +1,123 @@
+#version 450
+
+// Enable FP16 extension for 2x speedup on RDNA3
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+// RDNA3 Optimized Matrix Multiplication Compute Shader
+// Workgroup size optimized for AMD Radeon 780M (RDNA3 wavefront = 64 threads)
+// Using 16x4 for better memory coalescing and cache utilization on RDNA3
+layout(local_size_x = 16, local_size_y = 4, local_size_z = 1) in;
+
+// Push constants for matrix dimensions
+layout(push_constant) uniform PushConstants {
+    uint M;  // rows of A and C
+    uint N;  // cols of B and C
+    uint K;  // cols of A and rows of B
+    uint tile_size;
+    uint flags; // Bit 0: 0 for FP32, 1 for FP16
+} pc;
+
+// Conditional buffer types based on precision flag
+#define USE_FP16 ((pc.flags & 1u) != 0u)
+
+// FP32 buffers
+layout(std430, binding = 0) readonly buffer MatrixA_FP32 {
+    float matrix_a_fp32[];
+};
+
+layout(std430, binding = 1) readonly buffer MatrixB_FP32 {
+    float matrix_b_fp32[];
+};
+
+layout(std430, binding = 2) writeonly buffer MatrixC_FP32 {
+    float matrix_c_fp32[];
+};
+
+// FP16 buffers (same bindings, different views)
+layout(std430, binding = 0) readonly buffer MatrixA_FP16 {
+    float16_t matrix_a_fp16[];
+};
+
+layout(std430, binding = 1) readonly buffer MatrixB_FP16 {
+    float16_t matrix_b_fp16[];
+};
+
+layout(std430, binding = 2) writeonly buffer MatrixC_FP16 {
+    float16_t matrix_c_fp16[];
+};
+
+// Shared memory for tile-based computation (RDNA3 LDS optimization)
+// Use FP32 for shared memory to avoid precision loss in accumulation
+// Optimized for 16x4 workgroup - better memory coalescing on RDNA3
+shared float tile_a[4][16];
+shared float tile_b[4][16];
+
+void main() {
+    uint global_row = gl_GlobalInvocationID.y;
+    uint global_col = gl_GlobalInvocationID.x;
+    uint local_row = gl_LocalInvocationID.y;
+    uint local_col = gl_LocalInvocationID.x;
+
+    // Early exit for out-of-bounds threads
+    if (global_row >= pc.M || global_col >= pc.N) {
+        return;
+    }
+
+    // Use FP32 accumulator for better precision even in FP16 mode
+    float accumulator = 0.0;
+
+    // Tile-based matrix multiplication optimized for 16x4 workgroup
+    uint num_tiles = (pc.K + pc.tile_size - 1) / pc.tile_size;
+
+    for (uint tile_idx = 0; tile_idx < num_tiles; ++tile_idx) {
+        // Load tile into shared memory - optimized for 16x4 workgroup
+        uint a_row = global_row;
+        uint a_col = tile_idx * pc.tile_size + local_col;
+        uint b_row = tile_idx * pc.tile_size + local_row;
+        uint b_col = global_col;
+
+        // Load A tile with bounds checking (conditional on precision)
+        // Each thread loads one element with better memory coalescing
+        if (a_col < pc.K) {
+            if (USE_FP16) {
+                tile_a[local_row][local_col] = float(matrix_a_fp16[a_row * pc.K + a_col]);
+            } else {
+                tile_a[local_row][local_col] = matrix_a_fp32[a_row * pc.K + a_col];
+            }
+        } else {
+            tile_a[local_row][local_col] = 0.0;
+        }
+
+        // Load B tile with bounds checking (conditional on precision)
+        // Optimized access pattern for RDNA3 memory hierarchy
+        if (b_row < pc.K) {
+            if (USE_FP16) {
+                tile_b[local_row][local_col] = float(matrix_b_fp16[b_row * pc.N + b_col]);
+            } else {
+                tile_b[local_row][local_col] = matrix_b_fp32[b_row * pc.N + b_col];
+            }
+        } else {
+            tile_b[local_row][local_col] = 0.0;
+        }
+
+        // Synchronize workgroup
+        barrier();
+
+        // Compute partial dot product (always in FP32 for precision)
+        // Optimized loop for 16x4 tile size
+        for (uint k = 0; k < pc.tile_size; ++k) {
+            accumulator += tile_a[local_row][k] * tile_b[k][local_col];
+        }
+
+        // Synchronize before next tile
+        barrier();
+    }
+
+    // Store result (conditional on precision)
+    if (USE_FP16) {
+        matrix_c_fp16[global_row * pc.N + global_col] = float16_t(accumulator);
+    } else {
+        matrix_c_fp32[global_row * pc.N + global_col] = accumulator;
+    }
+}

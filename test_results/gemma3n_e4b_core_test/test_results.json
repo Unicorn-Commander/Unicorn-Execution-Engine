@@ -1,0 +1,271 @@
+{
+  "test_timestamp": 1752079561.586914,
+  "test_duration": 5.59426736831665,
+  "overall_success_rate": 1.0,
+  "total_tests": 6,
+  "successful_tests": 6,
+  "test_results": {
+    "component_initialization": {
+      "quantizer": true,
+      "allocator": true,
+      "elastic_system": true,
+      "npu_kernels": true,
+      "vulkan_shaders": true,
+      "hma_bridge": true,
+      "loader_state": "ready",
+      "success": true
+    },
+    "model_loading": {
+      "loading_success": true,
+      "loading_time": 0.23984980583190918,
+      "active_elastic_params": 33,
+      "loader_state": "ready",
+      "success": true
+    },
+    "inference_performance": {
+      "inference_results": [
+        {
+          "prompt": "What is artificial intelligence?",
+          "success": true,
+          "tokens_generated": 50,
+          "inference_time": 0.3048224449157715,
+          "tokens_per_second": 164.0299158869879,
+          "elastic_params_active": 33
+        },
+        {
+          "prompt": "Explain quantum computing in simple terms.",
+          "success": true,
+          "tokens_generated": 50,
+          "inference_time": 0.30868983268737793,
+          "tokens_per_second": 161.97488451340385,
+          "elastic_params_active": 33
+        },
+        {
+          "prompt": "Write a short story about a robot.",
+          "success": true,
+          "tokens_generated": 50,
+          "inference_time": 0.3077354431152344,
+          "tokens_per_second": 162.47722229797571,
+          "elastic_params_active": 60
+        },
+        {
+          "prompt": "What are the benefits of renewable energy?",
+          "success": true,
+          "tokens_generated": 50,
+          "inference_time": 0.31165313720703125,
+          "tokens_per_second": 160.434771965042,
+          "elastic_params_active": 60
+        },
+        {
+          "prompt": "How does machine learning work?",
+          "success": true,
+          "tokens_generated": 50,
+          "inference_time": 0.29319334030151367,
+          "tokens_per_second": 170.53593355354212,
+          "elastic_params_active": 60
+        }
+      ],
+      "successful_tests": 5,
+      "failed_tests": 0,
+      "average_tps": 163.89054564339034,
+      "average_inference_time": 0.30521883964538576,
+      "success": true
+    },
+    "elastic_scaling": {
+      "hma_bridge_available": true,
+      "elastic_system_available": true,
+      "parameter_activation": [
+        "layer_0_q_proj_elastic",
+        "layer_0_k_proj_elastic",
+        "layer_0_v_proj_elastic",
+        "layer_0_o_proj_elastic",
+        "layer_1_q_proj_elastic",
+        "layer_1_k_proj_elastic",
+        "layer_1_v_proj_elastic",
+        "layer_1_o_proj_elastic",
+        "layer_2_q_proj_elastic",
+        "layer_2_k_proj_elastic",
+        "layer_2_v_proj_elastic",
+        "layer_2_o_proj_elastic",
+        "layer_3_q_proj_elastic",
+        "layer_3_k_proj_elastic",
+        "layer_3_v_proj_elastic",
+        "layer_3_o_proj_elastic"
+      ],
+      "parameter_deactivation": [
+        "layer_0_q_proj_elastic",
+        "layer_0_k_proj_elastic",
+        "layer_0_v_proj_elastic",
+        "layer_0_o_proj_elastic",
+        "layer_1_q_proj_elastic",
+        "layer_1_k_proj_elastic",
+        "layer_1_v_proj_elastic",
+        "layer_1_o_proj_elastic"
+      ],
+      "memory_optimization": true,
+      "success": true
+    },
+    "hardware_utilization": {
+      "loader_status": {
+        "state": "ready",
+        "model_config": {
+          "model_path": "./models/gemma-3n-e4b-it",
+          "model_type": "gemma3n-e4b",
+          "hidden_size": 3072,
+          "num_layers": 24,
+          "num_heads": 24,
+          "num_key_value_heads": 8,
+          "intermediate_size": 8192,
+          "max_sequence_length": 32768,
+          "vocab_size": 256000,
+          "elastic_enabled": true,
+          "quantization_enabled": true,
+          "mix_n_match_enabled": true
+        },
+        "hardware_config": {
+          "npu_enabled": true,
+          "igpu_enabled": true,
+          "cpu_enabled": true,
+          "hma_enabled": true,
+          "turbo_mode": true,
+          "memory_optimization": true,
+          "zero_copy_enabled": true,
+          "compression_enabled": true
+        },
+        "performance_metrics": {
+          "initialization_time": 3.823220729827881,
+          "loading_time": 0.23978662490844727,
+          "inference_time": [
+            0.3048224449157715,
+            0.30868983268737793,
+            0.3077354431152344,
+            0.31165313720703125,
+            0.29319334030151367
+          ],
+          "tokens_per_second": [
+            164.0299158869879,
+            161.97488451340385,
+            162.47722229797571,
+            160.434771965042,
+            170.53593355354212
+          ],
+          "memory_usage": [
+            174587904,
+            174587904,
+            301989888,
+            301989888,
+            301989888
+          ],
+          "hardware_utilization": [],
+          "elastic_activation_count": 60,
+          "cache_hit_rate": 0.0
+        },
+        "active_elastic_params": 60,
+        "components": {
+          "quantizer": true,
+          "allocator": true,
+          "elastic_system": true,
+          "npu_kernels": true,
+          "vulkan_shaders": true,
+          "hma_bridge": true
+        },
+        "memory_status": {
+          "devices": {
+            "npu_phoenix": {
+              "total_size": 21474836480,
+              "allocated_size": 259522557,
+              "free_size": 21215313923,
+              "utilization": 0.012084960797801613,
+              "active_blocks": 56,
+              "regions": 1
+            },
+            "radeon_780m": {
+              "total_size": 34359738368,
+              "allocated_size": 0,
+              "free_size": 34359738368,
+              "utilization": 0.0,
+              "active_blocks": 0,
+              "regions": 1
+            },
+            "system_cpu": {
+              "total_size": 47244640256,
+              "allocated_size": 0,
+              "free_size": 47244640256,
+              "utilization": 0.0,
+              "active_blocks": 0,
+              "regions": 1
+            }
+          },
+          "allocation_stats": {
+            "total_allocated": 259522557,
+            "peak_allocation": 301989888,
+            "allocation_count": 64,
+            "deallocation_count": 8,
+            "active_regions": 56
+          },
+          "performance_metrics": {
+            "avg_allocation_time": 4.045665264129639e-06,
+            "avg_transfer_time": 0,
+            "avg_bandwidth_utilization": 0
+          },
+          "elastic_blocks": {
+            "total": 168,
+            "active": 51,
+            "compressed": 5,
+            "inactive": 112
+          }
+        }
+      },
+      "components_active": 6,
+      "memory_status": {
+        "total_allocated": 259522557,
+        "peak_allocation": 301989888,
+        "allocation_count": 64,
+        "deallocation_count": 8,
+        "active_regions": 56
+      },
+      "performance_metrics": {
+        "initialization_time": 3.823220729827881,
+        "loading_time": 0.23978662490844727,
+        "inference_time": [
+          0.3048224449157715,
+          0.30868983268737793,
+          0.3077354431152344,
+          0.31165313720703125,
+          0.29319334030151367
+        ],
+        "tokens_per_second": [
+          164.0299158869879,
+          161.97488451340385,
+          162.47722229797571,
+          160.434771965042,
+          170.53593355354212
+        ],
+        "memory_usage": [
+          174587904,
+          174587904,
+          301989888,
+          301989888,
+          301989888
+        ],
+        "hardware_utilization": [],
+        "elastic_activation_count": 60,
+        "cache_hit_rate": 0.0
+      },
+      "success": true
+    },
+    "memory_status": {
+      "hma_bridge_available": true,
+      "memory_devices": [
+        "npu_phoenix",
+        "radeon_780m",
+        "system_cpu"
+      ],
+      "elastic_blocks": 168,
+      "active_blocks": 51,
+      "total_memory": 259522557,
+      "allocated_memory": 259522557,
+      "success": true
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "hardware_config": {
+    "npu_phoenix": {
+      "memory_budget": 2147483648,
+      "compute_budget": 17179869184,
+      "precision": "INT8",
+      "preferred_ops": [
+        "attention",
+        "embedding",
+        "layer_norm"
+      ],
+      "max_layers": 16,
+      "turbo_mode": true,
+      "latency_priority": true
+    },
+    "radeon_780m": {
+      "memory_budget": 17179869184,
+      "compute_budget": 2899102924.8,
+      "precision": "INT4",
+      "preferred_ops": [
+        "ffn",
+        "output_projection",
+        "matrix_multiply"
+      ],
+      "max_layers": 32,
+      "parallel_streams": 4,
+      "bandwidth_priority": true
+    },
+    "system_memory": {
+      "memory_budget": 85899345920,
+      "compute_budget": 1288490188.8,
+      "precision": "FP16",
+      "preferred_ops": [
+        "inactive_params",
+        "orchestration",
+        "fallback"
+      ],
+      "max_layers": 128,
+      "storage_priority": true
+    }
+  },
+  "mix_n_match_config": {
+    "target_performance": 200,
+    "memory_efficiency": 0.85,
+    "compute_efficiency": 0.9,
+    "elastic_scaling_enabled": true,
+    "dynamic_reallocation": true,
+    "load_balancing": true,
+    "quality_preservation": 0.95
+  },
+  "elastic_config": {
+    "base_active_layers": 16,
+    "elastic_active_layers": 8,
+    "activation_threshold": 0.7,
+    "deactivation_threshold": 0.3,
+    "scaling_factor": 1.5
+  },
+  "timestamp": 1752077776.3290558
+}

@@ -1,0 +1,98 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_8bit_storage : require
+
+// Gemma 3 Gated FFN Compute Shader
+// Processes gate_proj, up_proj, down_proj with SiLU activation
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Buffers for INT4 quantized weights and INT8 activations
+layout(set = 0, binding = 0, std430) restrict readonly buffer InputBuffer {
+    int8_t input_data[];
+};
+
+layout(set = 0, binding = 1, std430) restrict readonly buffer GateWeights {
+    int8_t gate_weights[];  // INT4 packed as INT8
+};
+
+layout(set = 0, binding = 2, std430) restrict readonly buffer UpWeights {
+    int8_t up_weights[];    // INT4 packed as INT8
+};
+
+layout(set = 0, binding = 3, std430) restrict readonly buffer DownWeights {
+    int8_t down_weights[];  // INT4 packed as INT8
+};
+
+layout(set = 0, binding = 4, std430) restrict writeonly buffer OutputBuffer {
+    int8_t output_data[];
+};
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint seq_len;
+    uint hidden_size;
+    uint intermediate_size;
+    uint batch_size;
+};
+
+// SiLU activation function (x * sigmoid(x))
+float silu(float x) {
+    return x / (1.0 + exp(-x));
+}
+
+// INT4 dequantization
+float dequantize_int4(int8_t val) {
+    return float(val) / 8.0;  // Scale factor for INT4
+}
+
+// INT8 quantization
+int8_t quantize_int8(float val) {
+    return int8_t(clamp(val * 128.0, -128.0, 127.0));
+}
+
+void main() {
+    uint batch_idx = gl_GlobalInvocationID.z;
+    uint seq_idx = gl_GlobalInvocationID.y;
+    uint hidden_idx = gl_GlobalInvocationID.x;
+    
+    if (batch_idx >= batch_size || seq_idx >= seq_len || hidden_idx >= hidden_size) {
+        return;
+    }
+    
+    uint input_offset = batch_idx * seq_len * hidden_size + seq_idx * hidden_size;
+    uint output_offset = input_offset;
+    
+    // Load input activation
+    int8_t input_val = input_data[input_offset + hidden_idx];
+    float input_fp = float(input_val) / 128.0;
+    
+    // Gate projection: input @ gate_weights
+    float gate_sum = 0.0;
+    for (uint i = 0; i < hidden_size; i++) {
+        uint weight_idx = hidden_idx * hidden_size + i;
+        float weight_val = dequantize_int4(gate_weights[weight_idx]);
+        gate_sum += input_fp * weight_val;
+    }
+    
+    // Up projection: input @ up_weights  
+    float up_sum = 0.0;
+    for (uint i = 0; i < hidden_size; i++) {
+        uint weight_idx = hidden_idx * hidden_size + i;
+        float weight_val = dequantize_int4(up_weights[weight_idx]);
+        up_sum += input_fp * weight_val;
+    }
+    
+    // Apply SiLU to gate and multiply with up
+    float gated_output = silu(gate_sum) * up_sum;
+    
+    // Down projection: gated_output @ down_weights
+    float down_sum = 0.0;
+    for (uint i = 0; i < intermediate_size; i++) {
+        uint weight_idx = hidden_idx * intermediate_size + i;
+        float weight_val = dequantize_int4(down_weights[weight_idx]);
+        down_sum += gated_output * weight_val;
+    }
+    
+    // Quantize and store output
+    output_data[output_offset + hidden_idx] = quantize_int8(down_sum);
+}

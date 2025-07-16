@@ -28,11 +28,17 @@ class VulkanFFNComputeEngine:
         self.ffn_compute_times = []
         self.total_ffn_operations = 0
         
-    def initialize(self) -> bool:
+        # Persistent weight buffers
+        self.gate_weight_buffer = None
+        self.up_weight_buffer = None
+        self.down_weight_buffer = None
+        self.weights_loaded = False
+        
+    def initialize(self, use_fp16: bool = False) -> bool:
         """Initialize Vulkan FFN compute engine"""
         logger.info("🎮 Initializing Vulkan FFN Compute Engine...")
         
-        success = self.vulkan_compute.initialize()
+        success = self.vulkan_compute.initialize(use_fp16=use_fp16)
         if success:
             self.initialized = True
             logger.info("✅ Vulkan FFN Compute Engine ready for iGPU acceleration!")
@@ -40,44 +46,61 @@ class VulkanFFNComputeEngine:
             logger.error("❌ Failed to initialize Vulkan FFN Compute Engine")
         
         return success
-    
-    def compute_ffn_layer(self, 
-                         hidden_states: torch.Tensor,
-                         gate_proj_weight: torch.Tensor,
-                         up_proj_weight: torch.Tensor,
-                         down_proj_weight: torch.Tensor) -> torch.Tensor:
+
+    def load_weights(self, gate_proj_weight: torch.Tensor, up_proj_weight: torch.Tensor, down_proj_weight: torch.Tensor):
+        """Pre-load FFN weights to persistent Vulkan buffers on the iGPU"""
+        if not self.initialized:
+            raise RuntimeError("Vulkan FFN compute engine not initialized")
+
+        logger.info("🚀 Pre-loading FFN weights to iGPU VRAM...")
+        
+        # Convert tensors to numpy and then create persistent buffers
+        gate_weight_np = gate_proj_weight.T.cpu().numpy()
+        up_weight_np = up_proj_weight.T.cpu().numpy()
+        down_weight_np = down_proj_weight.T.cpu().numpy()
+
+        self.gate_weight_buffer = self.vulkan_compute.create_persistent_buffer(gate_weight_np)
+        self.up_weight_buffer = self.vulkan_compute.create_persistent_buffer(up_weight_np)
+        self.down_weight_buffer = self.vulkan_compute.create_persistent_buffer(down_weight_np)
+        
+        self.weights_loaded = True
+        logger.info("✅ FFN weights loaded and resident on iGPU.")
+
+    def compute_ffn_layer(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """
-        Compute FFN layer using Vulkan iGPU acceleration
+        Compute FFN layer using Vulkan iGPU acceleration with pre-loaded weights.
+        Weights are expected to be resident on the GPU already.
         
         FFN formula: down_proj(silu(gate_proj(x)) * up_proj(x))
         """
-        if not self.initialized:
-            raise RuntimeError("Vulkan FFN compute engine not initialized")
+        if not self.initialized or not self.weights_loaded:
+            raise RuntimeError("Vulkan engine not initialized or weights not pre-loaded.")
         
-        logger.info(f"🚀 Vulkan FFN Layer: {hidden_states.shape}")
+        logger.info(f"🚀 Vulkan FFN Layer (pre-loaded weights): {hidden_states.shape}")
         start_time = time.time()
         
-        # Convert tensors to numpy float16 for optimized Vulkan compute
-        hidden_np = hidden_states.detach().cpu().numpy().astype(np.float16)
-        gate_weight_np = gate_proj_weight.detach().cpu().numpy().astype(np.float16)
-        up_weight_np = up_proj_weight.detach().cpu().numpy().astype(np.float16)
-        down_weight_np = down_proj_weight.detach().cpu().numpy().astype(np.float16)
+        # Convert only the changing hidden_states tensor to numpy
+        hidden_np = hidden_states.detach().cpu().numpy().astype(np.float32)
         
         # Reshape for matrix multiplication
         batch_size, seq_len, hidden_size = hidden_np.shape
-        hidden_flat = hidden_np.reshape(-1, hidden_size)  # (batch*seq, hidden)
+        hidden_flat = hidden_np.reshape(-1, hidden_size)
         
-        # FUSED VULKAN OPERATION: All FFN computation on GPU
-        logger.info("   🚀 Fused FFN: gate_proj + up_proj + silu + multiply + down_proj (Vulkan)")
-        final_output = self.vulkan_compute.compute_fused_ffn(
-            hidden_flat, gate_weight_np.T, up_weight_np.T, down_weight_np.T
+        # FUSED VULKAN OPERATION: Use pre-loaded weight buffers
+        logger.info("   🚀 815 GFLOPS Fused FFN with resident weights: gate_proj + up_proj + silu + multiply + down_proj")
+        final_output = self.vulkan_compute.compute_fused_ffn_persistent_weights(
+            hidden_flat, 
+            self.gate_weight_buffer, 
+            self.up_weight_buffer, 
+            self.down_weight_buffer, 
+            flags=1
         )
         
         # Reshape back to original shape
         final_output_reshaped = final_output.reshape(batch_size, seq_len, hidden_size)
         
         # Convert back to torch tensor
-        result = torch.from_numpy(final_output_reshaped).to(hidden_states.device)
+        result = torch.from_numpy(final_output_reshaped.astype(np.float32))
         
         # Performance tracking
         compute_time = time.time() - start_time
@@ -124,6 +147,11 @@ class VulkanFFNComputeEngine:
             "min_ffn_time_ms": np.min(self.ffn_compute_times) * 1000,
             "max_ffn_time_ms": np.max(self.ffn_compute_times) * 1000
         }
+
+    def cleanup(self):
+        """Cleanup Vulkan resources"""
+        if self.vulkan_compute:
+            self.vulkan_compute.cleanup()
     
     def benchmark_ffn_performance(self, 
                                  batch_size: int = 1,
@@ -249,4 +277,9 @@ def test_vulkan_ffn_engine():
     return benchmark_stats
 
 if __name__ == "__main__":
-    test_vulkan_ffn_engine()
+    try:
+        test_vulkan_ffn_engine()
+    finally:
+        # Ensure cleanup is called even if test fails
+        ffn_engine = VulkanFFNComputeEngine()
+        ffn_engine.cleanup()

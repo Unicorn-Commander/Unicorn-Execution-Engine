@@ -1,0 +1,24 @@
+{
+  "npu_settings": {
+    "turbo_mode": true,
+    "device_id": "0000:c7:00.1",
+    "memory_budget_mb": 2048,
+    "optimization_level": "maximum"
+  },
+  "igpu_settings": {
+    "memory_budget_mb": 8192,
+    "rocm_enabled": true,
+    "async_execution": true
+  },
+  "performance_targets": {
+    "gemma3n_e2b_tps": 100,
+    "qwen25_tps": 60,
+    "ttft_ms": 25,
+    "turbo_improvement_percent": 30
+  },
+  "monitoring": {
+    "enable_metrics": true,
+    "log_performance": true,
+    "real_time_display": true
+  }
+}

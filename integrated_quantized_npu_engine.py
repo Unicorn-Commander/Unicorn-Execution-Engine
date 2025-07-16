@@ -383,9 +383,21 @@ class IntegratedQuantizedNPUEngine:
             down_np = down_weight.detach().cpu().numpy().astype(np.float32)
             
             try:
+                # Ensure proper tensor shapes for Vulkan processing
+                if hidden_np.ndim == 3:
+                    batch_size, seq_len, hidden_size = hidden_np.shape
+                    hidden_flat = hidden_np.reshape(-1, hidden_size)  # (batch*seq, hidden)
+                else:
+                    hidden_flat = hidden_np
+                    batch_size, seq_len = 1, hidden_np.shape[0]
+                
                 # Gate projection via Vulkan
-                gate_output_np = self.vulkan_compute.execute_matrix_multiply(hidden_np, gate_np.T)
-                up_output_np = self.vulkan_compute.execute_matrix_multiply(hidden_np, up_np.T)
+                gate_output_flat = self.vulkan_compute.execute_matrix_multiply(hidden_flat, gate_np.T)
+                up_output_flat = self.vulkan_compute.execute_matrix_multiply(hidden_flat, up_np.T)
+                
+                # Reshape back to original dimensions
+                gate_output_np = gate_output_flat.reshape(batch_size, seq_len, -1)
+                up_output_np = up_output_flat.reshape(batch_size, seq_len, -1)
                 
                 # SiLU activation (CPU for now, can be moved to Vulkan later)
                 gate_tensor = torch.from_numpy(gate_output_np)
@@ -393,8 +405,9 @@ class IntegratedQuantizedNPUEngine:
                 activated = F.silu(gate_tensor) * up_tensor
                 
                 # Down projection via Vulkan
-                activated_np = activated.detach().cpu().numpy().astype(np.float32)
-                ffn_output_np = self.vulkan_compute.execute_matrix_multiply(activated_np, down_np.T)
+                activated_flat = activated.detach().cpu().numpy().astype(np.float32).reshape(-1, activated.shape[-1])
+                ffn_output_flat = self.vulkan_compute.execute_matrix_multiply(activated_flat, down_np.T)
+                ffn_output_np = ffn_output_flat.reshape(batch_size, seq_len, -1)
                 
                 ffn_output = torch.from_numpy(ffn_output_np)
                 logger.debug(f"   ✅ Vulkan FFN completed: {hidden_states.shape} -> {ffn_output.shape}")

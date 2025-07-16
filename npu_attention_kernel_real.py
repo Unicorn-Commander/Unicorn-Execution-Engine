@@ -1,409 +1,302 @@
-#!/usr/bin/env python3
+#\!/usr/bin/env python3
 """
-Real NPU Attention Kernel using MLIR-AIE2 Iron API
-Programs actual NPU Phoenix hardware for attention computation
+Real NPU Attention Kernel - Direct AMD Phoenix NPU Hardware Acceleration
+No simulations - real hardware or failure
 """
 
-import sys
 import numpy as np
 import logging
-from pathlib import Path
+import ctypes
+import os
+from typing import Dict, Tuple, List, Optional, Any
 
-# Add the working MLIR-AIE2 Python bindings to path
-MLIR_AIE_PATH = Path.home() / "Development" / "whisper_npu_project" / "mlir-aie"
-sys.path.append(str(MLIR_AIE_PATH / "install" / "python"))
-
-try:
-    from aie.iron import Kernel, ObjectFifo, Program, Runtime, Worker
-    from aie.iron.placers import SequentialPlacer
-    from aie.iron.device import NPU1Col1, NPU2
-    MLIR_AIE_AVAILABLE = True
-    print("✅ MLIR-AIE2 Iron API loaded successfully!")
-except ImportError as e:
-    print(f"❌ MLIR-AIE2 Iron API import failed: {e}")
-    MLIR_AIE_AVAILABLE = False
-    # Create dummy classes for testing
-    class NPU1Col1:
-        def __init__(self):
-            pass
-    class NPU2:
-        def __init__(self):
-            pass
-
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class NPUAttentionKernelReal:
-    """Real NPU Attention Kernel using MLIR-AIE2 Iron API"""
-    
-    def __init__(self, seq_length=256, d_model=512, num_heads=8):
+    """Real NPU Attention Kernel with direct hardware acceleration"""
+
+    def __init__(self, seq_length=256, d_model=5376, num_heads=32):
         self.seq_length = seq_length
         self.d_model = d_model
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
-        
-        self.program = None
-        self.runtime = None
-        self.compiled = False
         self.initialized = False
         
-        # Data types for NPU
-        self.dtype = np.float32
-        self.element_size = 4  # float32 = 4 bytes
+        # NPU hardware handles
+        self.npu_device = None
+        self.npu_context = None
+        self.xdna_driver = None
         
-        logger.info(f"🧠 NPU Attention Kernel initialized:")
-        logger.info(f"   Sequence Length: {seq_length}")
-        logger.info(f"   Model Dimension: {d_model}")
-        logger.info(f"   Number of Heads: {num_heads}")
-        logger.info(f"   Head Dimension: {self.head_dim}")
-    
+        # Kernel data
+        self.kernel_binary = None
+        self.kernel_config = None
+        self.kernel_loaded = False
+        
+        logger.info("🧠 Real NPU Attention Kernel Initialized.")
+        logger.info(f"   - Sequence Length: {seq_length}")
+        logger.info(f"   - Model Dimension: {d_model}")
+        logger.info(f"   - Number of Heads: {num_heads}")
+        logger.info(f"   - Head Dimension: {self.head_dim}")
+
     def initialize(self) -> bool:
-        """Initialize NPU attention kernel"""
-        logger.info("⚡ Initializing NPU Attention Kernel...")
+        """Initialize real NPU hardware"""
+        logger.info("⚡ Initializing Real NPU Hardware...")
         
         try:
-            # Create NPU attention kernel
-            device = NPU1Col1()  # Single column NPU for testing
-            program = self.create_attention_kernel(device)
-            
-            # Compile kernel
-            if self.compile_kernel():
-                self.initialized = True
-                logger.info("✅ NPU attention kernel initialized successfully")
-                return True
-            else:
-                logger.error("❌ NPU kernel compilation failed")
+            # Check for NPU device
+            if not self._detect_npu_device():
+                logger.error("❌ AMD Phoenix NPU not detected")
                 return False
                 
-        except Exception as e:
-            logger.error(f"❌ NPU attention kernel initialization failed: {e}")
-            # For testing, allow fallback to CPU
+            # Load NPU driver
+            if not self._load_npu_driver():
+                logger.error("❌ Failed to load NPU driver")
+                return False
+                
+            # Initialize NPU context
+            if not self._initialize_npu_context():
+                logger.error("❌ Failed to initialize NPU context")
+                return False
+                
+            # Load attention kernel
+            if not self._load_attention_kernel():
+                logger.error("❌ Failed to load attention kernel")
+                return False
+                
             self.initialized = True
-            logger.warning("⚠️ Using CPU fallback for attention computation")
-            return True
-    
-    def create_attention_kernel(self, device):
-        """Create NPU attention kernel using Iron API"""
-        logger.info("🔧 Creating NPU attention kernel...")
-        
-        # Define matrix sizes
-        matrix_size = self.seq_length * self.d_model
-        attention_size = self.seq_length * self.seq_length
-        
-        # Define tensor types
-        input_type = np.ndarray[(matrix_size,), np.dtype[self.dtype]]
-        attention_type = np.ndarray[(attention_size,), np.dtype[self.dtype]]
-        output_type = np.ndarray[(matrix_size,), np.dtype[self.dtype]]
-        
-        # Create ObjectFifos for data movement
-        of_query = ObjectFifo(input_type, name="query")
-        of_key = ObjectFifo(input_type, name="key")
-        of_value = ObjectFifo(input_type, name="value")
-        of_output = ObjectFifo(output_type, name="output")
-        
-        # Create intermediate ObjectFifos for attention computation
-        of_qk = ObjectFifo(attention_type, name="qk_scores")
-        of_softmax = ObjectFifo(attention_type, name="softmax_weights")
-        
-        # Define attention computation kernels
-        qk_kernel = Kernel(
-            "compute_qk_scores",
-            "attention_qk.cc.o",
-            [input_type, input_type, attention_type, np.int32, np.int32]
-        )
-        
-        softmax_kernel = Kernel(
-            "compute_softmax",
-            "attention_softmax.cc.o", 
-            [attention_type, attention_type, np.int32]
-        )
-        
-        output_kernel = Kernel(
-            "compute_output",
-            "attention_output.cc.o",
-            [attention_type, input_type, output_type, np.int32, np.int32]
-        )
-        
-        # Create workers for each computation stage
-        def qk_worker_fn(of_query, of_key, of_qk, qk_kernel):
-            """Worker for Q @ K^T computation"""
-            query_elem = of_query.acquire(1)
-            key_elem = of_key.acquire(1)
-            qk_elem = of_qk.acquire(1)
-            
-            qk_kernel(query_elem, key_elem, qk_elem, self.seq_length, self.d_model)
-            
-            of_query.release(1)
-            of_key.release(1)
-            of_qk.release(1)
-        
-        def softmax_worker_fn(of_qk, of_softmax, softmax_kernel):
-            """Worker for softmax computation"""
-            qk_elem = of_qk.acquire(1)
-            softmax_elem = of_softmax.acquire(1)
-            
-            softmax_kernel(qk_elem, softmax_elem, self.seq_length)
-            
-            of_qk.release(1)
-            of_softmax.release(1)
-        
-        def output_worker_fn(of_softmax, of_value, of_output, output_kernel):
-            """Worker for attention @ V computation"""
-            softmax_elem = of_softmax.acquire(1)
-            value_elem = of_value.acquire(1)
-            output_elem = of_output.acquire(1)
-            
-            output_kernel(softmax_elem, value_elem, output_elem, self.seq_length, self.d_model)
-            
-            of_softmax.release(1)
-            of_value.release(1)
-            of_output.release(1)
-        
-        # Create workers
-        qk_worker = Worker(
-            qk_worker_fn,
-            [of_query.cons(), of_key.cons(), of_qk.prod(), qk_kernel]
-        )
-        
-        softmax_worker = Worker(
-            softmax_worker_fn,
-            [of_qk.cons(), of_softmax.prod(), softmax_kernel]
-        )
-        
-        output_worker = Worker(
-            output_worker_fn,
-            [of_softmax.cons(), of_value.cons(), of_output.prod(), output_kernel]
-        )
-        
-        # Create program
-        self.program = Program(
-            device,
-            [qk_worker, softmax_worker, output_worker]
-        )
-        
-        logger.info("✅ NPU attention kernel created")
-        return self.program
-    
-    def compile_kernel(self):
-        """Compile the NPU kernel"""
-        if not self.program:
-            raise RuntimeError("Kernel not created")
-        
-        logger.info("🔨 Compiling NPU attention kernel...")
-        
-        try:
-            # For now, mark as compiled for testing
-            # TODO: Implement proper MLIR-AIE2 compilation pipeline
-            logger.warning("⚠️ Using simplified compilation for testing")
-            
-            self.compiled = True
-            logger.info("✅ NPU kernel compilation placeholder successful")
+            logger.info("✅ Real NPU Hardware initialized successfully")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Compilation failed: {e}")
+            logger.error(f"❌ NPU initialization failed: {e}")
             return False
-    
-    def execute_attention(self, query, key, value):
-        """Execute attention computation on NPU"""
-        if not self.compiled:
-            raise RuntimeError("Kernel not compiled")
-        
-        logger.info("⚡ Executing attention on NPU hardware...")
-        
-        # Flatten input matrices
-        query_flat = query.flatten().astype(self.dtype)
-        key_flat = key.flatten().astype(self.dtype)
-        value_flat = value.flatten().astype(self.dtype)
-        
-        # Prepare output buffer
-        output_flat = np.zeros(self.seq_length * self.d_model, dtype=self.dtype)
-        
+
+    def _detect_npu_device(self) -> bool:
+        """Detect AMD Phoenix NPU device"""
         try:
-            # Execute on NPU
-            self.runtime.run([query_flat, key_flat, value_flat, output_flat])
+            # Check for NPU accelerator device
+            npu_devices = []
             
-            # Reshape output
-            output = output_flat.reshape(self.seq_length, self.d_model)
+            # Method 1: Check /dev/accel devices
+            accel_devices = "/dev/accel"
+            if os.path.exists(accel_devices):
+                for device in os.listdir(accel_devices):
+                    accel_path = f"{accel_devices}/{device}"
+                    if os.path.exists(accel_path):
+                        npu_devices.append(accel_path)
+                        logger.info(f"✅ Found NPU accelerator device: {accel_path}")
             
-            logger.info("✅ NPU attention execution completed")
-            return output
+            # Method 2: Check /sys/class/accel devices
+            sys_accel = "/sys/class/accel"
+            if os.path.exists(sys_accel):
+                for device in os.listdir(sys_accel):
+                    device_path = f"{sys_accel}/{device}/device/vendor"
+                    if os.path.exists(device_path):
+                        with open(device_path, 'r') as f:
+                            vendor = f.read().strip()
+                        if vendor == "0x1022":  # AMD vendor ID
+                            # Check device ID for Phoenix NPU
+                            device_id_path = f"{sys_accel}/{device}/device/device"
+                            if os.path.exists(device_id_path):
+                                with open(device_id_path, 'r') as f:
+                                    device_id = f.read().strip()
+                                if device_id == "0x1502":  # Phoenix NPU device ID
+                                    logger.info(f"✅ Found AMD Phoenix NPU: {device} (vendor: {vendor}, device: {device_id})")
+                                    npu_devices.append(device)
+            
+            if not npu_devices:
+                logger.warning("⚠️ No AMD Phoenix NPU devices found")
+                return False
+                
+            logger.info(f"✅ AMD Phoenix NPU detection successful: {len(npu_devices)} devices")
+            return True
             
         except Exception as e:
-            logger.error(f"❌ NPU execution failed: {e}")
-            # Fallback to CPU computation
-            return self._cpu_attention_fallback(query, key, value)
-    
-    def _cpu_attention_fallback(self, query, key, value):
-        """Fallback CPU attention computation"""
-        logger.warning("🔄 Falling back to CPU attention computation")
+            logger.error(f"❌ NPU detection failed: {e}")
+            return False
+
+    def _load_npu_driver(self) -> bool:
+        """Load NPU driver library"""
+        try:
+            # Try to load the XDNA driver
+            driver_paths = [
+                "/usr/local/xrt/lib/libxrt_driver_xdna.so",
+                "/usr/lib/x86_64-linux-gnu/libxrt_driver_xdna.so",
+                "/opt/xilinx/xrt/lib/libxrt_driver_xdna.so"
+            ]
+            
+            for path in driver_paths:
+                if os.path.exists(path):
+                    try:
+                        self.xdna_driver = ctypes.CDLL(path)
+                        logger.info(f"✅ Loaded NPU driver: {path}")
+                        return True
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to load {path}: {e}")
+                        continue
+            
+            logger.error("❌ No NPU driver found")
+            return False
+            
+        except Exception as e:
+            logger.error(f"❌ NPU driver loading failed: {e}")
+            return False
+
+    def _initialize_npu_context(self) -> bool:
+        """Initialize NPU execution context"""
+        try:
+            # Check NPU availability through multiple methods
+            npu_interfaces = []
+            
+            # Method 1: Check /dev/accel device
+            if os.path.exists("/dev/accel/accel0"):
+                npu_interfaces.append("/dev/accel/accel0")
+                logger.info("✅ NPU device interface: /dev/accel/accel0")
+            
+            # Method 2: Check AMDXDNA driver module
+            if os.path.exists("/sys/module/amdxdna"):
+                npu_interfaces.append("/sys/module/amdxdna")
+                logger.info("✅ AMDXDNA driver module loaded")
+            
+            # Method 3: Check NPU PCI device
+            npu_pci_path = "/sys/devices/pci0000:00/0000:00:08.2/0000:c7:00.1"
+            if os.path.exists(npu_pci_path):
+                npu_interfaces.append(npu_pci_path)
+                logger.info(f"✅ NPU PCI device interface: {npu_pci_path}")
+            
+            # Method 4: Check for XRT runtime interfaces
+            xrt_paths = [
+                "/sys/kernel/tracing/events/amdxdna_trace",
+                "/sys/bus/pci/drivers/amdxdna"
+            ]
+            
+            for path in xrt_paths:
+                if os.path.exists(path):
+                    npu_interfaces.append(path)
+                    logger.info(f"✅ XRT NPU interface: {path}")
+            
+            if not npu_interfaces:
+                logger.error("❌ No NPU interfaces available")
+                return False
+            
+            # Initialize context using the available interfaces
+            self.npu_device = "/dev/accel/accel0"  # Primary NPU device
+            self.npu_context = {
+                "device": self.npu_device,
+                "interfaces": npu_interfaces,
+                "driver": "amdxdna",
+                "initialized": True
+            }
+            logger.info(f"✅ NPU context initialized with {len(npu_interfaces)} interfaces")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ NPU context initialization failed: {e}")
+            return False
+
+    def _load_attention_kernel(self) -> bool:
+        """Load attention computation kernel"""
+        try:
+            logger.info("⚡ Loading Flash Attention kernel for NPU...")
+            
+            # Check environment for kernel path
+            kernel_path = os.environ.get('NPU_KERNEL_PATH')
+            
+            if not kernel_path:
+                # Try to find best kernel
+                kernel_dir = "/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/npu_kernels"
+                
+                # Look for exact match first
+                kernel_path = f"{kernel_dir}/attention_{self.seq_length}_int8.bin"
+                
+                if not os.path.exists(kernel_path):
+                    # Try flash attention
+                    kernel_path = f"{kernel_dir}/gemma-3n-e4b-attention/flash_attention_kernel.bin"
+                    
+            if os.path.exists(kernel_path):
+                # Load the kernel binary
+                with open(kernel_path, 'rb') as f:
+                    self.kernel_binary = f.read()
+                    
+                self.kernel_loaded = True
+                logger.info(f"✅ Loaded NPU kernel: {os.path.basename(kernel_path)} ({len(self.kernel_binary)} bytes)")
+                
+                # Load config if available
+                import json
+                config_path = os.path.dirname(kernel_path) + "/kernel_configs.json"
+                if os.path.exists(config_path):
+                    with open(config_path, 'r') as f:
+                        self.kernel_config = json.load(f)
+                        logger.info("✅ Loaded kernel configuration")
+                
+                return True
+            else:
+                logger.error(f"❌ NPU kernel not found at {kernel_path}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"❌ Attention kernel loading failed: {e}")
+            return False
+
+    def compute_flash_attention(self, hidden_states: np.ndarray, q_proj_weight: np.ndarray, 
+                               k_proj_weight: np.ndarray, v_proj_weight: np.ndarray, 
+                               o_proj_weight: np.ndarray, kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Compute Flash Attention on real NPU hardware
+        """
+        if not self.initialized:
+            raise RuntimeError("Real NPU Kernel not initialized")
+
+        logger.info(f"🔥 Computing Flash Attention on REAL NPU Hardware: {hidden_states.shape}")
         
-        # Standard attention computation
-        scores = np.matmul(query, key.transpose()) / np.sqrt(self.head_dim)
-        attention_weights = self._softmax(scores)
-        output = np.matmul(attention_weights, value)
+        # This is where real NPU execution would happen
+        # Since we don't have the full NPU kernel compiled, we must fail gracefully
         
-        return output
-    
-    def _softmax(self, x):
-        """CPU softmax implementation"""
-        exp_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
-        return exp_x / np.sum(exp_x, axis=-1, keepdims=True)
-    
-    def compute_attention(self,
-                         hidden_states,
-                         q_proj_weight,
-                         k_proj_weight,
-                         v_proj_weight,
-                         o_proj_weight):
-        """Compute attention using NPU (interface for pipeline) - NO CPU FALLBACKS"""
+        # Check if we can actually execute on NPU
+        if not self._can_execute_on_npu():
+            raise RuntimeError("NPU execution not available - no compiled kernel")
+            
+        # Real NPU execution would go here
+        # For now, we must fail since we don't have real implementation
+        raise NotImplementedError("Real NPU kernel execution not yet implemented. Need compiled MLIR-AIE2 kernel.")
+
+    def _can_execute_on_npu(self) -> bool:
+        """Check if we can actually execute on NPU"""
+        # Real check would verify:
+        # - NPU device is available
+        # - Kernel is compiled and loaded
+        # - Memory is allocated
+        # - Context is ready
         
         if not self.initialized:
-            raise RuntimeError("❌ NPU attention kernel not initialized - HARDWARE REQUIRED")
-        
-        batch_size, seq_len, hidden_size = hidden_states.shape
-        
-        # Validate tensor dimensions for NPU compatibility
-        logger.info(f"🔍 Tensor dimensions: hidden_states={hidden_states.shape}")
-        logger.info(f"🔍 Weight dimensions: q_proj={q_proj_weight.shape}")
-        
-        # Ensure proper tensor shapes for matrix multiplication
-        if len(hidden_states.shape) != 3:
-            raise RuntimeError(f"❌ Invalid hidden_states shape: {hidden_states.shape} - expected 3D tensor")
-        
-        if len(q_proj_weight.shape) != 2:
-            raise RuntimeError(f"❌ Invalid q_proj_weight shape: {q_proj_weight.shape} - expected 2D tensor")
-        
-        # Check dimension compatibility
-        if hidden_states.shape[-1] != q_proj_weight.shape[-1]:
-            raise RuntimeError(f"❌ Dimension mismatch: hidden_size={hidden_states.shape[-1]} vs weight_dim={q_proj_weight.shape[-1]}")
-        
-        try:
-            # Project to Q, K, V with proper error handling
-            hidden_np = hidden_states.detach().cpu().numpy() if hasattr(hidden_states, 'detach') else hidden_states.numpy()
-            q_weight_np = q_proj_weight.detach().cpu().numpy() if hasattr(q_proj_weight, 'detach') else q_proj_weight.numpy()
-            k_weight_np = k_proj_weight.detach().cpu().numpy() if hasattr(k_proj_weight, 'detach') else k_proj_weight.numpy()
-            v_weight_np = v_proj_weight.detach().cpu().numpy() if hasattr(v_proj_weight, 'detach') else v_proj_weight.numpy()
-            o_weight_np = o_proj_weight.detach().cpu().numpy() if hasattr(o_proj_weight, 'detach') else o_proj_weight.numpy()
-            
-            # Check and log weight dimensions for debugging
-            logger.info(f"🔍 Weight shapes: Q={q_weight_np.shape}, K={k_weight_np.shape}, V={v_weight_np.shape}")
-            
-            # Ensure weight matrices are transposed correctly for attention computation
-            q = np.matmul(hidden_np, q_weight_np.T)
-            k = np.matmul(hidden_np, k_weight_np.T)
-            v = np.matmul(hidden_np, v_weight_np.T)
-            
-            logger.info(f"✅ Projection successful: Q={q.shape}, K={k.shape}, V={v.shape}")
-            
-            # For Gemma 3 with grouped-query attention, pad K and V to match Q dimensions
-            if k.shape[-1] != q.shape[-1]:
-                logger.info(f"🔧 Adjusting K/V dimensions for grouped-query attention")
-                logger.info(f"   Q dim: {q.shape[-1]}, K dim: {k.shape[-1]}, V dim: {v.shape[-1]}")
-                
-                # Repeat K and V to match Q dimensions (grouped-query attention pattern)
-                num_q_heads = q.shape[-1] // k.shape[-1] if k.shape[-1] > 0 else 1
-                if num_q_heads > 1:
-                    k = np.repeat(k, num_q_heads, axis=-1)
-                    v = np.repeat(v, num_q_heads, axis=-1)
-                    logger.info(f"   Repeated K/V {num_q_heads}x: K={k.shape}, V={v.shape}")
-                else:
-                    # Truncate Q to match K/V dimensions if needed
-                    q = q[..., :k.shape[-1]]
-                    logger.info(f"   Truncated Q to match K/V: Q={q.shape}")
-            
-            # FORCE NPU execution - no fallbacks
-            if self.compiled and hasattr(self, 'runtime') and self.runtime:
-                logger.info("⚡ Executing on NPU hardware...")
-                output_np = self.execute_attention(q, k, v)
-            else:
-                # Use optimized CPU attention as NPU placeholder (NO fallback messaging)
-                logger.info("⚡ Executing attention computation...")
-                output_np = self._npu_attention_placeholder(q, k, v)
-            
-            # Output projection
-            final_output = np.matmul(output_np, o_weight_np.T)
-            
-            # Convert back to torch tensor
-            import torch
-            result = torch.from_numpy(final_output.astype(np.float32))
-            
-            logger.info("✅ NPU attention computation successful")
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ NPU ATTENTION HARDWARE FAILURE: {e}")
-            raise RuntimeError(f"NPU HARDWARE EXECUTION REQUIRED - REFUSING CPU FALLBACK: {e}")
-    
-    def _npu_attention_placeholder(self, query, key, value):
-        """NPU attention computation placeholder - simulates NPU execution"""
-        # This represents what the NPU would compute
-        scores = np.matmul(query, key.transpose(0, 2, 1)) / np.sqrt(self.head_dim)
-        attention_weights = self._softmax(scores)
-        output = np.matmul(attention_weights, value)
-        return output
-    
-    def get_performance_stats(self):
-        """Get NPU performance statistics"""
-        return {
-            "device": "NPU Phoenix",
-            "seq_length": self.seq_length,
-            "d_model": self.d_model,
-            "num_heads": self.num_heads,
-            "memory_usage_mb": (self.seq_length * self.d_model * self.element_size * 4) / (1024 * 1024),
-            "compiled": self.compiled,
-            "dtype": str(self.dtype)
-        }
-
-def test_npu_attention_kernel():
-    """Test the NPU attention kernel"""
-    print("🧠 Testing NPU Attention Kernel")
-    print("=" * 40)
-    
-    if not MLIR_AIE_AVAILABLE:
-        print("❌ MLIR-AIE2 not available, skipping test")
-        return False
-    
-    # Create NPU attention kernel
-    seq_length = 256
-    d_model = 512
-    num_heads = 8
-    
-    kernel = NPUAttentionKernelReal(seq_length, d_model, num_heads)
-    
-    try:
-        # Create program for NPU device
-        device = NPU1Col1()  # Single column NPU for testing
-        program = kernel.create_attention_kernel(device)
-        
-        # Compile kernel
-        if not kernel.compile_kernel():
-            print("❌ Compilation failed")
             return False
-        
-        # Create test data
-        query = np.random.randn(seq_length, d_model).astype(np.float32) * 0.1
-        key = np.random.randn(seq_length, d_model).astype(np.float32) * 0.1
-        value = np.random.randn(seq_length, d_model).astype(np.float32) * 0.1
-        
-        # Execute attention
-        output = kernel.execute_attention(query, key, value)
-        
-        # Get performance stats
-        stats = kernel.get_performance_stats()
-        
-        print(f"✅ NPU attention test completed!")
-        print(f"   Input shape: {query.shape}")
-        print(f"   Output shape: {output.shape}")
-        print(f"   Memory usage: {stats['memory_usage_mb']:.2f} MB")
-        print(f"   Device: {stats['device']}")
-        print(f"   Compiled: {stats['compiled']}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ NPU attention test failed: {e}")
-        return False
+            
+        if not self.kernel_loaded or not self.kernel_binary:
+            return False
+            
+        # Check if NPU device and context are ready
+        if not self.npu_device or not self.npu_context:
+            return False
+            
+        # For now, we have the kernel binary but need XRT runtime
+        # to actually execute it. This requires the full XRT API.
+        return self.kernel_loaded
 
-if __name__ == "__main__":
-    test_npu_attention_kernel()
+    def cleanup(self):
+        """Clean up NPU resources"""
+        logger.info("🧹 Cleaning up Real NPU Hardware resources...")
+        
+        if self.npu_context:
+            # Clean up NPU context
+            self.npu_context = None
+            
+        if self.npu_device:
+            # Clean up NPU device
+            self.npu_device = None
+            
+        if self.xdna_driver:
+            # Clean up driver
+            self.xdna_driver = None
+            
+        self.initialized = False
+        logger.info("✅ NPU cleanup complete")

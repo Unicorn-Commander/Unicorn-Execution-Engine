@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Real Model Loader for Gemma3n E2B
-Load actual Gemma3n E2B model from downloaded weights
-Integrate with real acceleration engines
+Real Model Loader for Gemma 3 27B
+Load actual Gemma 3 27B model from downloaded weights
+Integrate with optimized NPU+iGPU acceleration engines
 """
 
 import os
@@ -16,10 +16,11 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import logging
 
-# Import acceleration engines
-from quantization_engine import AdvancedQuantizationEngine, QuantizationConfig, QuantizationType
+# Import optimized acceleration engines
 from npu_attention_kernel import NPUAttentionKernel, NPUAttentionConfig
-from igpu_acceleration_engine import IGPUAccelerationEngine, IGPUConfig
+from optimized_vulkan_compute import OptimizedVulkanCompute
+from hma_zero_copy_optimization import OptimizedMemoryBridge
+from advanced_hardware_tuner import AdvancedHardwareTuner
 
 # Try to import transformers
 try:
@@ -35,15 +36,18 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RealModelConfig:
     """Configuration for real model loading"""
-    model_path: str = "/home/ucadmin/Development/AI-Models/gemma-3n-E2B-it"
+    model_path: str = "/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/models/gemma-3-27b-it"
+    quantized_path: str = "/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/quantized_models/gemma-3-27b-it-memory-efficient"
     device_map: str = "auto"
     torch_dtype: str = "float16"
     trust_remote_code: bool = True
+    use_quantized: bool = True
     
     # Acceleration settings
-    use_quantization: bool = True
+    use_optimized_vulkan: bool = True
     use_npu_attention: bool = True
-    use_igpu_ffn: bool = True
+    use_hma_memory: bool = True
+    use_hardware_tuning: bool = True
     
     # Memory settings
     max_memory_mb: int = 16384  # 16GB VRAM available
@@ -51,8 +55,8 @@ class RealModelConfig:
 
 class RealModelLoader:
     """
-    Real model loader that loads actual Gemma3n E2B weights
-    and integrates with hardware acceleration engines
+    Real model loader that loads actual Gemma 3 27B weights
+    and integrates with optimized NPU+iGPU acceleration engines
     """
     
     def __init__(self, config: RealModelConfig):
@@ -61,10 +65,11 @@ class RealModelLoader:
         self.tokenizer = None
         self.model_config = None
         
-        # Acceleration engines
-        self.quantization_engine = None
+        # Optimized acceleration engines
         self.npu_attention = None
-        self.igpu_engine = None
+        self.vulkan_compute = None
+        self.memory_bridge = None
+        self.hardware_tuner = None
         
         # Model components
         self.layers = []
@@ -73,52 +78,46 @@ class RealModelLoader:
         self.lm_head = None
         
     def initialize_acceleration_engines(self) -> bool:
-        """Initialize all acceleration engines"""
-        logger.info("🚀 Initializing acceleration engines...")
+        """Initialize all optimized acceleration engines"""
+        logger.info("🚀 Initializing optimized acceleration engines...")
         
         success = True
         
-        # Initialize quantization
-        if self.config.use_quantization:
-            quant_config = QuantizationConfig(
-                quant_type=QuantizationType.HYBRID_Q4,
-                block_size=32,
-                npu_friendly=True,
-                igpu_friendly=True
-            )
-            self.quantization_engine = AdvancedQuantizationEngine(quant_config)
-            logger.info("✅ Quantization engine initialized")
+        # Initialize hardware tuner
+        if self.config.use_hardware_tuning:
+            self.hardware_tuner = AdvancedHardwareTuner()
+            logger.info("✅ Hardware tuner initialized")
         
         # Initialize NPU attention
         if self.config.use_npu_attention:
             npu_config = NPUAttentionConfig(
                 seq_length=2048,
-                d_model=2048,
-                num_heads=8,
-                head_dim=256
+                d_model=4096,  # Gemma 3 27B
+                num_heads=32,
+                head_dim=128
             )
             self.npu_attention = NPUAttentionKernel(npu_config)
             success &= self.npu_attention.initialize()
             logger.info("✅ NPU attention kernel initialized")
         
-        # Initialize iGPU acceleration
-        if self.config.use_igpu_ffn:
-            igpu_config = IGPUConfig(
-                memory_budget_mb=self.config.max_memory_mb,
-                precision="fp16",
-                use_rocm=True,
-                use_gguf_fallback=True
-            )
-            self.igpu_engine = IGPUAccelerationEngine(igpu_config)
-            success &= self.igpu_engine.initialize()
-            logger.info("✅ iGPU acceleration engine initialized")
+        # Initialize optimized Vulkan compute
+        if self.config.use_optimized_vulkan:
+            self.vulkan_compute = OptimizedVulkanCompute()
+            success &= self.vulkan_compute.initialize()
+            logger.info("✅ Optimized Vulkan compute initialized")
+        
+        # Initialize HMA memory bridge
+        if self.config.use_hma_memory:
+            self.memory_bridge = OptimizedMemoryBridge()
+            success &= self.memory_bridge.initialize()
+            logger.info("✅ HMA memory bridge initialized")
         
         return success
     
     def load_model(self) -> bool:
-        """Load the real Gemma3n E2B model"""
+        """Load the real Gemma 3 27B model"""
         try:
-            logger.info(f"📥 Loading Gemma3n E2B model from {self.config.model_path}")
+            logger.info(f"📥 Loading Gemma 3 27B model from {self.config.model_path}")
             
             model_path = Path(self.config.model_path)
             if not model_path.exists():
@@ -136,6 +135,19 @@ class RealModelLoader:
             
             logger.info(f"Model type: {self.model_config.get('model_type', 'unknown')}")
             logger.info(f"Architecture: {self.model_config.get('architectures', ['unknown'])[0]}")
+            
+            # Check if quantized model exists
+            if self.config.use_quantized:
+                quantized_path = Path(self.config.quantized_path)
+                if quantized_path.exists():
+                    logger.info(f"Using quantized model from {quantized_path}")
+                    # Load quantization results
+                    results_path = quantized_path / "quantization_results.json"
+                    if results_path.exists():
+                        with open(results_path, 'r') as f:
+                            quant_results = json.load(f)
+                        logger.info(f"Quantized model size: {quant_results.get('quantized_size_gb', 'unknown')}GB")
+                        logger.info(f"Memory reduction: {quant_results.get('memory_reduction', 0)*100:.1f}%")
             
             # Try to load with transformers first
             if HAS_TRANSFORMERS:
@@ -336,8 +348,8 @@ class RealModelLoader:
                 attention_output = self.npu_attention.compute_attention(seq_input, seq_input, seq_input)
                 hidden_states[0] = attention_output
             
-            # iGPU FFN
-            if self.igpu_engine:
+            # iGPU FFN via Vulkan compute
+            if self.vulkan_compute:
                 # Create dummy FFN weights
                 weights = {
                     'gate': np.random.randn(8192, d_model).astype(np.float32) * 0.1,
@@ -347,7 +359,10 @@ class RealModelLoader:
                 
                 for i in range(batch_size):
                     seq_input = hidden_states[i]
-                    ffn_output = self.igpu_engine.compute_ffn(seq_input, weights)
+                    # Use Vulkan compute for FFN
+                    ffn_output = self.vulkan_compute.execute_optimized_matrix_multiply(
+                        seq_input, weights['gate']
+                    )
                     hidden_states[i] += ffn_output * 0.1  # Residual connection
         
         return "Simulated response with real acceleration engines: The model is working with NPU attention and iGPU FFN acceleration!"
@@ -393,9 +408,10 @@ class RealModelLoader:
             'model_loaded': self.model is not None,
             'tokenizer_loaded': self.tokenizer is not None,
             'acceleration_engines': {
-                'quantization': self.quantization_engine is not None,
                 'npu_attention': self.npu_attention is not None,
-                'igpu_ffn': self.igpu_engine is not None
+                'vulkan_compute': self.vulkan_compute is not None,
+                'hma_memory': self.memory_bridge is not None,
+                'hardware_tuning': self.hardware_tuner is not None
             }
         }
         
@@ -418,11 +434,14 @@ def main():
     
     # Create configuration
     config = RealModelConfig(
-        model_path="/home/ucadmin/Development/AI-Models/gemma-3n-E2B-it",
+        model_path="/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/models/gemma-3-27b-it",
+        quantized_path="/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/quantized_models/gemma-3-27b-it-memory-efficient",
         torch_dtype="float16",
-        use_quantization=True,
+        use_quantized=True,
+        use_optimized_vulkan=True,
         use_npu_attention=True,
-        use_igpu_ffn=True
+        use_hma_memory=True,
+        use_hardware_tuning=True
     )
     
     # Initialize loader

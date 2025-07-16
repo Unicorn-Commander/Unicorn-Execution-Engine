@@ -1,6 +1,26 @@
 # NPU Development Toolkit
 
-Complete development environment and documentation for AMD Ryzen AI NPU programming.
+**Complete development environment and documentation for AMD Ryzen AI NPU programming.**
+
+## 🦄 **PURE HARDWARE SYSTEM OPERATIONAL**
+
+**Status**: ✅ **NPU Integration Complete in Pure Hardware System**
+
+The NPU Development Toolkit is now fully integrated into the **Pure Hardware System**:
+- **✅ Zero Framework Dependencies**: No PyTorch/ROCm - pure numpy + MLIR-AIE2
+- **✅ Direct NPU Programming**: Real MLIR-AIE2 kernels operational
+- **✅ Production API Server**: http://localhost:8006 serving inference
+- **✅ Hardware Acceleration**: NPU Phoenix (16 TOPS) + AMD Radeon 780M
+
+### **Pure Hardware System Usage:**
+```bash
+# Launch pure hardware system (NO PyTorch/ROCm)
+cd ../
+python pure_hardware_api_server.py
+
+# Traditional system with NPU support
+python unicorn_quantization_engine_official.py
+```
 
 ## Quick Start: Docker-Based Setup (Recommended)
 

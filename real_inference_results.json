@@ -1,0 +1,69 @@
+{
+  "engine": "Real NPU+Vulkan Hybrid",
+  "hardware": "AMD Phoenix NPU + Radeon 780M",
+  "memory_architecture": "Dynamic HMA allocation",
+  "average_tps": 220.03950208131457,
+  "peak_tps": 223.4742638157967,
+  "results": [
+    {
+      "test_name": "Short sequence",
+      "input_shape": [
+        1,
+        512,
+        4096
+      ],
+      "total_time_ms": 2364.072561264038,
+      "npu_time_ms": 134.12976264953613,
+      "vulkan_time_ms": 2229.942798614502,
+      "overall_tps": 216.57541667259164,
+      "memory_usage": {
+        "npu_total_mb": 4180,
+        "igpu_total_mb": 9982,
+        "cpu_total_mb": 55296,
+        "npu_regions": 21,
+        "igpu_regions": 63,
+        "total_allocated_gb": 67.830078125
+      }
+    },
+    {
+      "test_name": "Medium sequence",
+      "input_shape": [
+        1,
+        1024,
+        4096
+      ],
+      "total_time_ms": 4653.089761734009,
+      "npu_time_ms": 252.21753120422363,
+      "vulkan_time_ms": 4400.872230529785,
+      "overall_tps": 220.0688257555553,
+      "memory_usage": {
+        "npu_total_mb": 4520,
+        "igpu_total_mb": 11346,
+        "cpu_total_mb": 55296,
+        "npu_regions": 41,
+        "igpu_regions": 125,
+        "total_allocated_gb": 69.494140625
+      }
+    },
+    {
+      "test_name": "Long sequence",
+      "input_shape": [
+        1,
+        2048,
+        4096
+      ],
+      "total_time_ms": 9164.366245269775,
+      "npu_time_ms": 460.39867401123047,
+      "vulkan_time_ms": 8703.967571258545,
+      "overall_tps": 223.4742638157967,
+      "memory_usage": {
+        "npu_total_mb": 5180,
+        "igpu_total_mb": 14074,
+        "cpu_total_mb": 55296,
+        "npu_regions": 61,
+        "igpu_regions": 187,
+        "total_allocated_gb": 72.802734375
+      }
+    }
+  ]
+}

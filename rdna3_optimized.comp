@@ -1,0 +1,114 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_KHR_shader_subgroup_shuffle : enable
+
+// RDNA3 Optimized Matrix Multiply
+// - Wave32 mode for AMD 780M
+// - INT8 with INT32 accumulation
+// - Optimized for L1 cache
+// - Uses matrix cores when available
+
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+// Buffers - INT8 weights, FP16 activations
+layout(binding = 0) readonly buffer InputA {
+    float16_t dataA[];
+};
+
+layout(binding = 1) readonly buffer InputB {
+    int8_t dataB[];  // Quantized weights
+};
+
+layout(binding = 2) writeonly buffer Output {
+    float16_t dataC[];
+};
+
+layout(binding = 3) readonly buffer Scales {
+    float16_t scales[];  // Quantization scales
+};
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint M;  // Rows of A
+    uint N;  // Cols of B
+    uint K;  // Cols of A / Rows of B
+    uint strideA;
+    uint strideB;
+    uint strideC;
+} params;
+
+// Shared memory for tile loading
+shared float16_t tileA[32][33];  // 33 to avoid bank conflicts
+shared int8_t tileB[32][32];
+
+void main() {
+    const uint tx = gl_LocalInvocationID.x;
+    const uint bx = gl_WorkGroupID.x;
+    const uint by = gl_WorkGroupID.y;
+    
+    // RDNA3 optimization: Use wave-level operations
+    const uint waveSize = 32;
+    const uint waveId = gl_SubgroupInvocationID;
+    
+    // Calculate tile position
+    const uint tileRow = by * 32;
+    const uint tileCol = bx * 32;
+    
+    // Accumulator in FP32 for accuracy
+    float acc[4] = float[4](0.0, 0.0, 0.0, 0.0);
+    
+    // Loop over K dimension in tiles
+    for (uint k = 0; k < params.K; k += 32) {
+        // Collaborative load of tile A (activations)
+        if (tileRow + tx < params.M && k + gl_LocalInvocationID.y < params.K) {
+            for (uint i = 0; i < 4; ++i) {
+                if (k + i * 8 < params.K) {
+                    tileA[tx][i * 8 + gl_LocalInvocationID.y] = 
+                        dataA[(tileRow + tx) * params.strideA + k + i * 8 + gl_LocalInvocationID.y];
+                }
+            }
+        }
+        
+        // Collaborative load of tile B (weights) - INT8
+        if (k + tx < params.K && tileCol + gl_LocalInvocationID.y < params.N) {
+            for (uint i = 0; i < 4; ++i) {
+                if (tileCol + i * 8 < params.N) {
+                    tileB[tx][i * 8 + gl_LocalInvocationID.y] = 
+                        dataB[(k + tx) * params.strideB + tileCol + i * 8 + gl_LocalInvocationID.y];
+                }
+            }
+        }
+        
+        // Synchronize to ensure tile is loaded
+        barrier();
+        
+        // Compute partial dot products
+        // RDNA3: Unroll for better ILP
+        for (uint kk = 0; kk < 32; ++kk) {
+            float16_t a = tileA[tx][kk];
+            
+            // Process 4 elements at once for better throughput
+            for (uint i = 0; i < 4; ++i) {
+                int8_t b = tileB[kk][i * 8 + waveId % 8];
+                float16_t scale = scales[tileCol + i * 8 + waveId % 8];
+                
+                // Dequantize and accumulate
+                acc[i] += float(a) * float(b) * float(scale);
+            }
+        }
+        
+        barrier();
+    }
+    
+    // Write results
+    if (tileRow + tx < params.M) {
+        for (uint i = 0; i < 4; ++i) {
+            if (tileCol + i * 8 + waveId % 8 < params.N) {
+                uint outIdx = (tileRow + tx) * params.strideC + tileCol + i * 8 + waveId % 8;
+                dataC[outIdx] = float16_t(acc[i]);
+            }
+        }
+    }
+}

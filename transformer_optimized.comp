@@ -1,0 +1,190 @@
+#version 450
+
+// Optimized Transformer Compute Shaders for AMD RDNA3
+// Includes fused operations for better performance
+
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+#extension GL_KHR_shader_subgroup_basic : enable
+#extension GL_KHR_shader_subgroup_arithmetic : enable
+
+// RDNA3 optimal workgroup size (wavefront = 64)
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Push constants for operation parameters
+layout(push_constant) uniform PushConstants {
+    uint M;          // batch size * sequence length
+    uint K;          // input dimension
+    uint N;          // output dimension
+    uint operation;  // 0: QKV projection, 1: FFN gate+up, 2: FFN down, 3: RMSNorm
+    uint use_fp16;   // 0: FP32, 1: FP16
+    float epsilon;   // for RMSNorm
+} pc;
+
+// Input/Output buffers
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    float data[];
+} input_buffer;
+
+layout(std430, binding = 1) readonly buffer WeightBuffer {
+    float data[];
+} weight_buffer;
+
+layout(std430, binding = 2) readonly buffer BiasBuffer {
+    float data[];
+} bias_buffer;
+
+layout(std430, binding = 3) buffer OutputBuffer {
+    float data[];
+} output_buffer;
+
+// Shared memory for reductions
+shared float shared_data[64];
+
+// Fast SiLU activation (for FFN gate)
+float fast_silu(float x) {
+    // Approximation: x / (1 + exp(-x)) ≈ x * (0.5 + 0.5 * tanh(0.5 * x))
+    return x * (0.5 + 0.5 * tanh(0.5 * x));
+}
+
+// RMSNorm implementation
+void rms_norm(uint idx) {
+    float sum_sq = 0.0;
+    
+    // Calculate sum of squares
+    for (uint i = 0; i < pc.K; i += gl_WorkGroupSize.x) {
+        uint offset = i + gl_LocalInvocationID.x;
+        if (offset < pc.K) {
+            float val = input_buffer.data[idx * pc.K + offset];
+            sum_sq += val * val;
+        }
+    }
+    
+    // Reduce within workgroup
+    shared_data[gl_LocalInvocationID.x] = sum_sq;
+    barrier();
+    
+    // Tree reduction
+    for (uint stride = 32; stride > 0; stride >>= 1) {
+        if (gl_LocalInvocationID.x < stride) {
+            shared_data[gl_LocalInvocationID.x] += shared_data[gl_LocalInvocationID.x + stride];
+        }
+        barrier();
+    }
+    
+    // Calculate normalization factor
+    float norm_factor = 1.0 / sqrt(shared_data[0] / float(pc.K) + pc.epsilon);
+    
+    // Apply normalization and scaling
+    for (uint i = 0; i < pc.K; i += gl_WorkGroupSize.x) {
+        uint offset = i + gl_LocalInvocationID.x;
+        if (offset < pc.K) {
+            float val = input_buffer.data[idx * pc.K + offset];
+            float weight = weight_buffer.data[offset];
+            output_buffer.data[idx * pc.K + offset] = val * norm_factor * weight;
+        }
+    }
+}
+
+// Fused matrix multiply + bias + activation
+void fused_matmul_bias_activation(uint row) {
+    // Each thread computes multiple output elements
+    const uint ELEMS_PER_THREAD = 4;
+    
+    for (uint col_base = gl_LocalInvocationID.x * ELEMS_PER_THREAD; 
+         col_base < pc.N; 
+         col_base += gl_WorkGroupSize.x * ELEMS_PER_THREAD) {
+        
+        // Compute 4 elements at once for better instruction throughput
+        float acc[ELEMS_PER_THREAD];
+        for (uint e = 0; e < ELEMS_PER_THREAD; ++e) {
+            acc[e] = 0.0;
+        }
+        
+        // Matrix multiplication
+        for (uint k = 0; k < pc.K; ++k) {
+            float input_val = input_buffer.data[row * pc.K + k];
+            
+            for (uint e = 0; e < ELEMS_PER_THREAD; ++e) {
+                uint col = col_base + e;
+                if (col < pc.N) {
+                    float weight_val = weight_buffer.data[k * pc.N + col];
+                    acc[e] += input_val * weight_val;
+                }
+            }
+        }
+        
+        // Add bias and apply activation
+        for (uint e = 0; e < ELEMS_PER_THREAD; ++e) {
+            uint col = col_base + e;
+            if (col < pc.N) {
+                // Add bias
+                acc[e] += bias_buffer.data[col];
+                
+                // Apply activation based on operation type
+                if (pc.operation == 1) { // FFN gate+up
+                    acc[e] = fast_silu(acc[e]);
+                }
+                
+                output_buffer.data[row * pc.N + col] = acc[e];
+            }
+        }
+    }
+}
+
+// Fused FFN gate + up projection with SiLU
+void fused_ffn_gate_up(uint row) {
+    // For FFN: compute gate and up projections, apply SiLU to gate, multiply
+    const uint intermediate_size = pc.N / 2; // N is total output (gate + up)
+    
+    for (uint col = gl_LocalInvocationID.x; col < intermediate_size; col += gl_WorkGroupSize.x) {
+        float gate_acc = 0.0;
+        float up_acc = 0.0;
+        
+        // Compute both projections
+        for (uint k = 0; k < pc.K; ++k) {
+            float input_val = input_buffer.data[row * pc.K + k];
+            
+            // Gate projection weights are in first half
+            float gate_weight = weight_buffer.data[k * pc.N + col];
+            gate_acc += input_val * gate_weight;
+            
+            // Up projection weights are in second half
+            float up_weight = weight_buffer.data[k * pc.N + col + intermediate_size];
+            up_acc += input_val * up_weight;
+        }
+        
+        // Add biases
+        gate_acc += bias_buffer.data[col];
+        up_acc += bias_buffer.data[col + intermediate_size];
+        
+        // Apply SiLU to gate and multiply with up
+        float result = fast_silu(gate_acc) * up_acc;
+        output_buffer.data[row * intermediate_size + col] = result;
+    }
+}
+
+void main() {
+    uint global_id = gl_GlobalInvocationID.x;
+    uint row = global_id / gl_WorkGroupSize.x;
+    
+    if (row >= pc.M) return;
+    
+    switch (pc.operation) {
+        case 0: // QKV projection or standard matmul
+            fused_matmul_bias_activation(row);
+            break;
+            
+        case 1: // FFN gate+up with SiLU
+            fused_ffn_gate_up(row);
+            break;
+            
+        case 2: // FFN down projection
+            fused_matmul_bias_activation(row);
+            break;
+            
+        case 3: // RMSNorm
+            rms_norm(row);
+            break;
+    }
+}

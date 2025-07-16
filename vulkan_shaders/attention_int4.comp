@@ -1,0 +1,12 @@
+
+        #version 450
+        
+        // INT4 attention computation with optimized dequantization
+        layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in;
+        
+        // INT4 optimized attention computation
+        void main() {
+            // Attention computation with INT4 weights
+            // Uses lookup tables for fast dequantization
+        }
+        

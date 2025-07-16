@@ -1,0 +1,85 @@
+{
+  "kernel_name": "gemma3_attention_npu",
+  "target_hardware": "AMD Phoenix NPU (16 TOPS)",
+  "quantization": {
+    "weights": "INT4 (4-bit)",
+    "activations": "INT8 (8-bit)",
+    "accumulation": "INT32",
+    "output": "INT8"
+  },
+  "memory_layout": {
+    "input_tokens": {
+      "shape": [
+        2048,
+        4096
+      ],
+      "dtype": "int8",
+      "size_mb": 8.0
+    },
+    "attention_weights": {
+      "q_proj": {
+        "shape": [
+          4096,
+          4096
+        ],
+        "dtype": "int4",
+        "size_mb": 8.0
+      },
+      "k_proj": {
+        "shape": [
+          4096,
+          4096
+        ],
+        "dtype": "int4",
+        "size_mb": 8.0
+      },
+      "v_proj": {
+        "shape": [
+          4096,
+          4096
+        ],
+        "dtype": "int4",
+        "size_mb": 8.0
+      },
+      "o_proj": {
+        "shape": [
+          4096,
+          4096
+        ],
+        "dtype": "int4",
+        "size_mb": 8.0
+      }
+    },
+    "attention_output": {
+      "shape": [
+        2048,
+        4096
+      ],
+      "dtype": "int8",
+      "size_mb": 8.0
+    },
+    "total_memory_mb": 48.0
+  },
+  "computation_graph": {
+    "1_query_projection": "input @ q_weights -> query",
+    "2_key_projection": "input @ k_weights -> key",
+    "3_value_projection": "input @ v_weights -> value",
+    "4_attention_scores": "query @ key.T / sqrt(d_k) -> scores",
+    "5_attention_weights": "softmax(scores) -> attn_weights",
+    "6_attention_output": "attn_weights @ value -> output",
+    "7_output_projection": "output @ o_weights -> final"
+  },
+  "performance_targets": {
+    "throughput_tps": 50,
+    "latency_ms": 20,
+    "memory_bandwidth_gbps": 100,
+    "compute_utilization": 0.85
+  },
+  "optimization_strategy": {
+    "tile_mapping": "Distribute Q,K,V,O across 4 AIE tiles",
+    "memory_tiling": "2048 tokens -> 4x512 token tiles",
+    "vector_units": "Use 32-wide vector operations",
+    "pipeline_stages": 8,
+    "prefetch_strategy": "Double-buffer input/output"
+  }
+}

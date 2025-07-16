@@ -1,0 +1,37 @@
+{
+  "npu_config": {
+    "device_name": "NPU Phoenix",
+    "tops_performance": 17179869184,
+    "memory_size": 2147483648,
+    "memory_bandwidth": 1099511627776,
+    "cores": 8,
+    "vector_units": 32,
+    "matrix_units": 8,
+    "precision_support": [
+      "INT8",
+      "INT4",
+      "FP16",
+      "BF16"
+    ],
+    "turbo_mode": true,
+    "max_sequence_length": 32768,
+    "optimal_tile_size": 64,
+    "max_batch_size": 16
+  },
+  "attention_config": {
+    "hidden_size": 3072,
+    "num_heads": 24,
+    "num_key_value_heads": 8,
+    "head_dim": 128,
+    "max_seq_len": 32768,
+    "sliding_window": 8192,
+    "rope_theta": 10000.0,
+    "attention_dropout": 0.1,
+    "kernel_type": "grouped_query_attention",
+    "elastic_enabled": true,
+    "precision": "INT8",
+    "tile_size": 64,
+    "memory_budget": 2147483648
+  },
+  "timestamp": 1752079115.8374035
+}

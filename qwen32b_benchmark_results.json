@@ -1,0 +1,146 @@
+{
+  "components": {
+    "memory_allocator": {
+      "status": "\u2705 PASSED",
+      "allocation_time": 0.1952800750732422,
+      "total_layers": 94,
+      "npu_layers": 2,
+      "igpu_layers": 62,
+      "system_layers": 30,
+      "memory_efficiency": {
+        "npu_phoenix": {
+          "allocated": 1551892480,
+          "total": 2147483648,
+          "utilization_percent": 72.265625
+        },
+        "radeon_780m": {
+          "allocated": 13042974720,
+          "total": 17179869184,
+          "utilization_percent": 75.92010498046875
+        },
+        "system_memory": {
+          "allocated": 24835522560,
+          "total": 85899345920,
+          "utilization_percent": 28.912353515625
+        }
+      }
+    },
+    "hma_bridge": {
+      "status": "\u2705 PASSED",
+      "setup_time": 0.026244640350341797,
+      "transfer_time": 0.0010597705841064453,
+      "bandwidth": 235.90011248593925,
+      "memory_layout": {
+        "npu_layers": 21,
+        "igpu_layers": 22,
+        "system_layers": 21
+      }
+    },
+    "npu_kernels": {
+      "status": "\u2705 PASSED",
+      "compilation_time": 0.0003020763397216797,
+      "kernels_compiled": "5/5",
+      "avg_execution_time": 0.001058673858642578,
+      "kernels": [
+        "qkv_projection",
+        "attention_scores",
+        "attention_softmax",
+        "attention_output",
+        "output_projection"
+      ]
+    },
+    "vulkan_shaders": {
+      "status": "\u2705 PASSED",
+      "compilation_time": 0.26309823989868164,
+      "shaders_compiled": "5/5",
+      "avg_execution_time": 0.002105379104614258,
+      "shaders": [
+        "gate_projection",
+        "up_projection",
+        "silu_activation",
+        "down_projection",
+        "layer_norm"
+      ]
+    },
+    "unicorn_loader": {
+      "status": "\u2705 PASSED",
+      "total_time": 0.8525886535644531,
+      "analysis_time": 0.5895085334777832,
+      "sharding_time": 0.0006225109100341797,
+      "context_time": 0.26245689392089844,
+      "num_shards": 130,
+      "num_contexts": 3,
+      "model_layers": 64
+    }
+  },
+  "inference": {
+    "individual_tests": [
+      {
+        "prompt": "Explain quantum computing in simple terms.",
+        "inference_time": 0.07511663436889648,
+        "tokens_generated": 50,
+        "tokens_per_second": 665.6315264931982,
+        "hardware_breakdown": {
+          "npu_time": 0.025,
+          "igpu_time": 0.035,
+          "system_time": 0.015
+        }
+      },
+      {
+        "prompt": "What are the benefits of AI acceleration?",
+        "inference_time": 0.07529830932617188,
+        "tokens_generated": 50,
+        "tokens_per_second": 664.0255332083692,
+        "hardware_breakdown": {
+          "npu_time": 0.025,
+          "igpu_time": 0.035,
+          "system_time": 0.015
+        }
+      },
+      {
+        "prompt": "How does neural network inference work?",
+        "inference_time": 0.07505178451538086,
+        "tokens_generated": 50,
+        "tokens_per_second": 666.206677467518,
+        "hardware_breakdown": {
+          "npu_time": 0.025,
+          "igpu_time": 0.035,
+          "system_time": 0.015
+        }
+      },
+      {
+        "prompt": "Describe the future of computing hardware.",
+        "inference_time": 0.07508015632629395,
+        "tokens_generated": 50,
+        "tokens_per_second": 665.9549266613529,
+        "hardware_breakdown": {
+          "npu_time": 0.025,
+          "igpu_time": 0.035,
+          "system_time": 0.015
+        }
+      },
+      {
+        "prompt": "What is the difference between NPU and GPU?",
+        "inference_time": 0.07534480094909668,
+        "tokens_generated": 50,
+        "tokens_per_second": 663.6157952528171,
+        "hardware_breakdown": {
+          "npu_time": 0.025,
+          "igpu_time": 0.035,
+          "system_time": 0.015
+        }
+      }
+    ],
+    "aggregate_metrics": {
+      "average_tps": 665.0868918166511,
+      "average_inference_time": 0.07517833709716797,
+      "total_tests": 5
+    }
+  },
+  "scores": {
+    "component_health": 100.0,
+    "performance_score": 100,
+    "overall_score": 100.0,
+    "grade": "A+ (Excellent)"
+  }
+}

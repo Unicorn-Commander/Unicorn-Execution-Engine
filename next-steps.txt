@@ -1,0 +1,120 @@
+● 🚀 NPU+iGPU Performance Optimization Checklist
+
+  Based on our performance analysis showing 0.005 tokens/sec (197 seconds per token), here's the prioritized roadmap to achieve production-ready performance:
+
+  🔥 HIGH PRIORITY (Critical for Performance)
+
+  1. Optimize Vulkan Shaders for Transformer Workloads
+
+  - ✅ Current: Basic matrix multiply shaders (13-14 GFLOPS)
+  - 🎯 Target: Transformer-optimized kernels (50+ GFLOPS)
+  - Tasks:
+    - Fused attention kernels
+    - Optimized FFN kernels with SiLU activation
+    - Memory-efficient shader design
+
+  2. Implement Batch Processing
+
+  - ✅ Current: Single token processing (poor GPU utilization)
+  - 🎯 Target: Multi-token batching (32-128 tokens)
+  - Tasks:
+    - Batch multiple tokens in single GPU call
+    - Optimize for prefill vs decode phases
+    - Dynamic batching for variable sequence lengths
+
+  3. Reduce CPU↔GPU Memory Transfer Overhead
+
+  - ✅ Current: Frequent transfers between CPU/GPU
+  - 🎯 Target: Minimize transfers, keep data on GPU
+  - Tasks:
+    - GPU-resident weight storage
+    - Persistent GPU buffers
+    - Zero-copy memory mapping where possible
+
+  4. Build and Integrate Real MLIR-AIE2 NPU Kernels
+
+  - ✅ Current: MLIR-AIE2 available but not compiled
+  - 🎯 Target: Real NPU attention acceleration
+  - Tasks:
+    - Complete MLIR-AIE2 build process
+    - Compile attention kernels for Phoenix NPU
+    - Integrate XRT runtime for NPU execution
+
+  ⚡ MEDIUM PRIORITY (Significant Improvements)
+
+  5. Pipeline Parallelization
+
+  - 🎯 Target: Overlap compute and memory transfers
+  - Tasks:
+    - Async GPU kernel execution
+    - Multi-stream processing
+    - NPU + iGPU concurrent execution
+
+  6. Optimize for AMD RDNA3 Architecture
+
+  - 🎯 Target: Architecture-specific optimizations
+  - Tasks:
+    - Workgroup size optimization
+    - Memory coalescing patterns
+    - Cache-friendly data layouts
+
+  7. Implement KV-Cache for Attention
+
+  - 🎯 Target: Avoid recomputing attention for previous tokens
+  - Tasks:
+    - Key-Value cache implementation
+    - Incremental attention computation
+    - Memory-efficient cache management
+
+  8. Mixed Precision Optimization
+
+  - 🎯 Target: FP16/BF16 for better throughput
+  - Tasks:
+    - FP16 Vulkan shader variants
+    - Mixed precision quantization
+    - Accuracy validation
+
+  📈 LOW PRIORITY (Nice to Have)
+
+  9. Layer-wise Streaming Optimization
+
+  - 🎯 Target: Further reduce memory usage
+  - Tasks:
+    - Intelligent layer prefetching
+    - Memory pool management
+    - Background loading
+
+  10. Performance Monitoring Tools
+
+  - 🎯 Target: Better debugging and optimization
+  - Tasks:
+    - GPU utilization monitoring
+    - Kernel timing analysis
+    - Memory bandwidth profiling
+
+  11. Production API Server
+
+  - 🎯 Target: Complete production deployment
+  - Tasks:
+    - OpenAI API compatibility
+    - Error handling and recovery
+    - Load balancing and scaling
+
+  🎯 Performance Targets
+
+  | Optimization Level    | Target Tokens/Sec | Time Per Token |
+  |-----------------------|-------------------|----------------|
+  | Current (Baseline)    | 0.005             | 197 seconds    |
+  | After High Priority   | 0.5 - 1.0         | 1-2 seconds    |
+  | After Medium Priority | 2.0 - 5.0         | 200-500ms      |
+  | Production Ready      | 10+               | <100ms         |
+
+  🚀 Immediate Next Steps (Recommended Order)
+
+  1. Start with Vulkan shader optimization (biggest impact)
+  2. Implement batch processing (easy wins)
+  3. Reduce memory transfers (architectural improvement)
+  4. Build MLIR-AIE2 NPU kernels (hardware acceleration)
+
+  Each step should provide significant performance improvements toward the goal of production-ready inference with real NPU+iGPU acceleration!
+

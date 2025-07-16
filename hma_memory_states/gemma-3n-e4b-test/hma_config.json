@@ -1,0 +1,68 @@
+{
+  "hma_config": {
+    "total_memory": 103079215104,
+    "memory_bandwidth": 96207267430.4,
+    "page_size": 4096,
+    "cache_line_size": 64,
+    "numa_domains": 1,
+    "coherency_protocol": "MESI",
+    "dma_channels": 8,
+    "zero_copy_enabled": true,
+    "compression_enabled": true,
+    "prefetch_enabled": true
+  },
+  "device_config": {
+    "npu_phoenix": {
+      "sram_size": 2147483648,
+      "hma_allocation": 21474836480,
+      "access_latency": 10,
+      "bandwidth": 1099511627776,
+      "preferred_data": [
+        "attention",
+        "embedding",
+        "elastic_attention"
+      ],
+      "coherency_domain": "npu",
+      "dma_channels": 4
+    },
+    "radeon_780m": {
+      "local_memory": 0,
+      "hma_allocation": 34359738368,
+      "access_latency": 100,
+      "bandwidth": 96207267430.4,
+      "preferred_data": [
+        "ffn",
+        "projection",
+        "elastic_ffn"
+      ],
+      "coherency_domain": "igpu",
+      "dma_channels": 2,
+      "compute_units": 12
+    },
+    "system_cpu": {
+      "cache_l3": 33554432,
+      "hma_allocation": 47244640256,
+      "access_latency": 80,
+      "bandwidth": 96207267430.4,
+      "preferred_data": [
+        "orchestration",
+        "inactive_elastic",
+        "compressed"
+      ],
+      "coherency_domain": "cpu",
+      "numa_node": 0
+    }
+  },
+  "elastic_config": {
+    "base_parameters": 2147483648,
+    "elastic_parameters": 2147483648,
+    "total_parameters": 4294967296,
+    "activation_granularity": 67108864,
+    "compression_ratio": 0.6,
+    "prefetch_distance": 134217728,
+    "memory_pooling": true,
+    "lazy_loading": true,
+    "swapping_enabled": true
+  },
+  "timestamp": 1752078947.1368651
+}

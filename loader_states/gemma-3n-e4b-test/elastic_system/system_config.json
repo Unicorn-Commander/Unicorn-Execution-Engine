@@ -1,0 +1,49 @@
+{
+  "config": {
+    "base_parameters": 2147483648,
+    "elastic_parameters": 2147483648,
+    "max_active_elastic": 1610612736.0,
+    "min_active_elastic": 536870912.0,
+    "activation_threshold": 0.7,
+    "deactivation_threshold": 0.3,
+    "response_time_target": 100,
+    "throughput_target": 100,
+    "quality_threshold": 0.95,
+    "memory_safety_margin": 0.1,
+    "decision_interval": 1.0,
+    "warmup_time": 5.0,
+    "cooldown_time": 10.0,
+    "max_activation_rate": 0.2,
+    "max_deactivation_rate": 0.1
+  },
+  "hardware_config": {
+    "npu_phoenix": {
+      "memory_budget": 2147483648,
+      "compute_budget": 17179869184,
+      "activation_latency": 0.001,
+      "preferred_types": [
+        "attention",
+        "embedding"
+      ]
+    },
+    "radeon_780m": {
+      "memory_budget": 17179869184,
+      "compute_budget": 2899102924.8,
+      "activation_latency": 0.005,
+      "preferred_types": [
+        "ffn",
+        "projection"
+      ]
+    },
+    "system_memory": {
+      "memory_budget": 85899345920,
+      "compute_budget": 1288490188.8,
+      "activation_latency": 0.01,
+      "preferred_types": [
+        "backup",
+        "storage"
+      ]
+    }
+  },
+  "timestamp": 1752079115.835846
+}

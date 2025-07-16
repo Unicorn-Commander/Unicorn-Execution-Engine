@@ -1,0 +1,98 @@
+#version 450
+
+// Batched GEMM for transformer layers
+// Optimized for processing multiple tokens simultaneously
+
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+// RDNA3 optimal: 8x8 tiles, 64 threads per workgroup
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(push_constant) uniform PushConstants {
+    uint batch_size;  // number of tokens to process
+    uint M;          // rows per batch
+    uint N;          // cols of output
+    uint K;          // inner dimension
+    uint strideA;    // stride between batches in A
+    uint strideB;    // stride between batches in B (0 for shared weights)
+    uint strideC;    // stride between batches in C
+    uint use_fp16;   // precision flag
+} pc;
+
+// Buffers
+layout(std430, binding = 0) readonly buffer MatrixA {
+    float data[];
+} matrix_a;
+
+layout(std430, binding = 1) readonly buffer MatrixB {
+    float data[];
+} matrix_b;
+
+layout(std430, binding = 2) writeonly buffer MatrixC {
+    float data[];
+} matrix_c;
+
+// Shared memory tiles (8x8 for RDNA3)
+shared float tile_a[8][8];
+shared float tile_b[8][8];
+
+void main() {
+    uint batch_id = gl_GlobalInvocationID.z;
+    uint global_row = gl_GlobalInvocationID.y;
+    uint global_col = gl_GlobalInvocationID.x;
+    
+    // Early exit
+    if (batch_id >= pc.batch_size || global_row >= pc.M || global_col >= pc.N) {
+        return;
+    }
+    
+    uint local_row = gl_LocalInvocationID.y;
+    uint local_col = gl_LocalInvocationID.x;
+    
+    // Calculate batch offsets
+    uint offset_a = batch_id * pc.strideA;
+    uint offset_b = (pc.strideB > 0) ? batch_id * pc.strideB : 0; // Shared weights if strideB == 0
+    uint offset_c = batch_id * pc.strideC;
+    
+    float accumulator = 0.0;
+    
+    // Tile-based computation
+    const uint TILE_SIZE = 8;
+    uint num_tiles = (pc.K + TILE_SIZE - 1) / TILE_SIZE;
+    
+    for (uint tile = 0; tile < num_tiles; ++tile) {
+        // Collaborative tile loading
+        uint tile_k = tile * TILE_SIZE;
+        
+        // Load A tile
+        uint a_row = global_row;
+        uint a_col = tile_k + local_col;
+        if (a_row < pc.M && a_col < pc.K) {
+            tile_a[local_row][local_col] = matrix_a.data[offset_a + a_row * pc.K + a_col];
+        } else {
+            tile_a[local_row][local_col] = 0.0;
+        }
+        
+        // Load B tile
+        uint b_row = tile_k + local_row;
+        uint b_col = global_col;
+        if (b_row < pc.K && b_col < pc.N) {
+            tile_b[local_row][local_col] = matrix_b.data[offset_b + b_row * pc.N + b_col];
+        } else {
+            tile_b[local_row][local_col] = 0.0;
+        }
+        
+        barrier();
+        
+        // Compute tile
+        for (uint k = 0; k < TILE_SIZE; ++k) {
+            accumulator += tile_a[local_row][k] * tile_b[k][local_col];
+        }
+        
+        barrier();
+    }
+    
+    // Store result
+    matrix_c.data[offset_c + global_row * pc.N + global_col] = accumulator;
+}

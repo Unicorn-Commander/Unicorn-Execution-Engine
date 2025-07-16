@@ -1,0 +1,143 @@
+#version 450
+
+// Universal INT4 Vectorized Compute Shader
+// Optimized for Radeon 780M RDNA3 architecture
+// Processes INT4 data in 64-element workgroups for maximum throughput
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Input/output buffers for INT4 data (packed as INT32)
+layout(set = 0, binding = 0, std430) restrict readonly buffer InputBuffer {
+    uint input_data[];
+};
+
+layout(set = 0, binding = 1, std430) restrict writeonly buffer OutputBuffer {
+    uint output_data[];
+};
+
+// Weights buffer (INT4 packed)
+layout(set = 0, binding = 2, std430) restrict readonly buffer WeightsBuffer {
+    uint weight_data[];
+};
+
+// Scale factors for dequantization
+layout(set = 0, binding = 3, std430) restrict readonly buffer ScalesBuffer {
+    float scales[];
+};
+
+// Push constants for configuration
+layout(push_constant) uniform PushConstants {
+    uint input_size;
+    uint output_size;
+    uint weight_rows;
+    uint weight_cols;
+    uint operation_type;  // 0=linear, 1=attention, 2=ffn
+} pc;
+
+// INT4 unpacking functions optimized for RDNA3
+ivec4 unpack_int4_low(uint packed) {
+    return ivec4(
+        int((packed >> 0) & 0xF) - 8,
+        int((packed >> 4) & 0xF) - 8,
+        int((packed >> 8) & 0xF) - 8,
+        int((packed >> 12) & 0xF) - 8
+    );
+}
+
+ivec4 unpack_int4_high(uint packed) {
+    return ivec4(
+        int((packed >> 16) & 0xF) - 8,
+        int((packed >> 20) & 0xF) - 8,
+        int((packed >> 24) & 0xF) - 8,
+        int((packed >> 28) & 0xF) - 8
+    );
+}
+
+uint pack_int4(ivec4 values) {
+    uvec4 clamped = uvec4(clamp(values + 8, 0, 15));
+    return (clamped.x) | (clamped.y << 4) | (clamped.z << 8) | (clamped.w << 12);
+}
+
+// Optimized INT4 linear operation
+vec4 int4_linear_operation(uint input_idx, uint weight_row) {
+    vec4 result = vec4(0.0);
+    
+    uint input_elements_per_uint = 8;  // 8 INT4 values per uint32
+    uint weight_elements_per_uint = 8;
+    
+    // Vectorized accumulation
+    for (uint i = 0; i < pc.weight_cols; i += input_elements_per_uint) {
+        uint input_word = input_data[input_idx + i / input_elements_per_uint];
+        uint weight_word = weight_data[weight_row * (pc.weight_cols / weight_elements_per_uint) + i / weight_elements_per_uint];
+        
+        // Unpack and accumulate
+        ivec4 input_low = unpack_int4_low(input_word);
+        ivec4 input_high = unpack_int4_high(input_word);
+        ivec4 weight_low = unpack_int4_low(weight_word);
+        ivec4 weight_high = unpack_int4_high(weight_word);
+        
+        // Dot product accumulation
+        result += vec4(dot(vec4(input_low), vec4(weight_low)));
+        result += vec4(dot(vec4(input_high), vec4(weight_high)));
+    }
+    
+    return result;
+}
+
+// SiLU activation (for Gemma models)
+vec4 silu_activation(vec4 x) {
+    return x / (1.0 + exp(-x));
+}
+
+// RoPE application (for Qwen models)
+vec4 apply_rope(vec4 x, float cos_val, float sin_val) {
+    vec2 x_pair = x.xy;
+    vec2 rotated = vec2(
+        x_pair.x * cos_val - x_pair.y * sin_val,
+        x_pair.x * sin_val + x_pair.y * cos_val
+    );
+    return vec4(rotated, x.zw);
+}
+
+void main() {
+    uint global_id = gl_GlobalInvocationID.x;
+    
+    // Bounds check
+    if (global_id >= pc.output_size) {
+        return;
+    }
+    
+    vec4 result = vec4(0.0);
+    
+    // Operation type dispatch
+    if (pc.operation_type == 0) {
+        // Linear operation
+        result = int4_linear_operation(global_id * pc.input_size / pc.output_size, global_id);
+        
+    } else if (pc.operation_type == 1) {
+        // Attention operation (optimized for attention matrices)
+        uint seq_len = uint(sqrt(float(pc.output_size)));
+        uint row = global_id / seq_len;
+        uint col = global_id % seq_len;
+        
+        result = int4_linear_operation(row * pc.input_size / seq_len, col);
+        
+        // Apply attention scaling
+        result /= sqrt(float(pc.weight_cols));
+        
+    } else if (pc.operation_type == 2) {
+        // FFN operation with activation
+        result = int4_linear_operation(global_id * pc.input_size / pc.output_size, global_id);
+        
+        // Apply SiLU activation for Gemma models
+        result = silu_activation(result);
+    }
+    
+    // Apply scaling and pack result
+    float scale = scales[global_id % textureSize(ScalesBuffer, 0)];
+    result *= scale;
+    
+    // Pack back to INT4 (simplified - store as single uint for now)
+    ivec4 quantized = ivec4(clamp(round(result), -8.0, 7.0));
+    output_data[global_id] = pack_int4(quantized);
+}

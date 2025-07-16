@@ -8,7 +8,7 @@
       "memory_mb": 0,
       "power_w": null,
       "success": false,
-      "error": "ROCM_ERROR,HIP error: invalid device function\nHIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing AMD_SERIALIZE_KERNEL=3\nCompile with `TORCH_USE_HIP_DSA` to enable device-side assertions."
+      "error": "ROCM_NO_DEVICE"
     },
     {
       "method": "ROCm",
@@ -18,7 +18,7 @@
       "memory_mb": 0,
       "power_w": null,
       "success": false,
-      "error": "ROCM_ERROR,HIP error: invalid device function\nHIP kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing AMD_SERIALIZE_KERNEL=3\nCompile with `TORCH_USE_HIP_DSA` to enable device-side assertions."
+      "error": "ROCM_NO_DEVICE"
     },
     {
       "method": "Vulkan",
@@ -33,8 +33,8 @@
     {
       "method": "NPU_Simulated",
       "operation": "Attention_512x2048",
-      "throughput_ops_sec": 0.7073048673145699,
-      "latency_ms": 1413.8175010681152,
+      "throughput_ops_sec": 0.6294575938036567,
+      "latency_ms": 1588.6693716049194,
       "memory_mb": 0,
       "power_w": null,
       "success": true,
@@ -43,8 +43,8 @@
     {
       "method": "Quantization_AWQ",
       "operation": "4096x4096_weights",
-      "throughput_ops_sec": 4.467020040492082,
-      "latency_ms": 223.862886428833,
+      "throughput_ops_sec": 4.202082053881735,
+      "latency_ms": 237.9772663116455,
       "memory_mb": 16.0,
       "power_w": null,
       "success": true,
@@ -53,8 +53,8 @@
     {
       "method": "Quantization_GPTQ",
       "operation": "4096x4096_weights",
-      "throughput_ops_sec": 4.56756047440816,
-      "latency_ms": 218.9352512359619,
+      "throughput_ops_sec": 4.611283963701689,
+      "latency_ms": 216.8593406677246,
       "memory_mb": 16.0,
       "power_w": null,
       "success": true,
@@ -63,8 +63,8 @@
     {
       "method": "Quantization_GGUF_Q4_K_M",
       "operation": "4096x4096_weights",
-      "throughput_ops_sec": 4.66039991644333,
-      "latency_ms": 214.57386016845703,
+      "throughput_ops_sec": 4.651283279660039,
+      "latency_ms": 214.9944305419922,
       "memory_mb": 16.0,
       "power_w": null,
       "success": true,
@@ -73,8 +73,8 @@
     {
       "method": "Quantization_Custom_Q4",
       "operation": "4096x4096_weights",
-      "throughput_ops_sec": 4.764262217618087,
-      "latency_ms": 209.89608764648438,
+      "throughput_ops_sec": 4.634129202620734,
+      "latency_ms": 215.7902717590332,
       "memory_mb": 16.0,
       "power_w": null,
       "success": true,
@@ -86,7 +86,7 @@
     "npu_available": true,
     "vulkan_available": false,
     "best_igpu_method": "Unknown",
-    "best_quantization": "Quantization_Custom_Q4",
+    "best_quantization": "Quantization_GGUF_Q4_K_M",
     "recommended_strategy": "CPU_Fallback"
   }
 }

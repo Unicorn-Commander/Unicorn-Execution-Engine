@@ -1,0 +1,72 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_8bit_storage : require
+
+// Optimized Matrix Multiplication for FFN layers
+// Uses workgroup shared memory and vectorized operations
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std430) restrict readonly buffer MatrixA {
+    int8_t matrix_a[];
+};
+
+layout(set = 0, binding = 1, std430) restrict readonly buffer MatrixB {
+    int8_t matrix_b[];
+};
+
+layout(set = 0, binding = 2, std430) restrict writeonly buffer MatrixC {
+    int8_t matrix_c[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint M, N, K;  // Matrix dimensions: A(M,K) * B(K,N) = C(M,N)
+};
+
+// Shared memory for tiling
+shared float tile_a[16][16];
+shared float tile_b[16][16];
+
+void main() {
+    uint row = gl_GlobalInvocationID.y;
+    uint col = gl_GlobalInvocationID.x;
+    
+    if (row >= M || col >= N) return;
+    
+    float sum = 0.0;
+    
+    // Tiled matrix multiplication
+    for (uint tile_k = 0; tile_k < K; tile_k += 16) {
+        // Load tile A into shared memory
+        uint a_row = gl_LocalInvocationID.y;
+        uint a_col = gl_LocalInvocationID.x;
+        if (row < M && (tile_k + a_col) < K) {
+            uint a_idx = row * K + tile_k + a_col;
+            tile_a[a_row][a_col] = float(matrix_a[a_idx]) / 128.0;
+        } else {
+            tile_a[a_row][a_col] = 0.0;
+        }
+        
+        // Load tile B into shared memory  
+        uint b_row = gl_LocalInvocationID.y;
+        uint b_col = gl_LocalInvocationID.x;
+        if ((tile_k + b_row) < K && col < N) {
+            uint b_idx = (tile_k + b_row) * N + col;
+            tile_b[b_row][b_col] = float(matrix_b[b_idx]) / 8.0;  // INT4 weights
+        } else {
+            tile_b[b_row][b_col] = 0.0;
+        }
+        
+        barrier();
+        
+        // Compute partial sum using shared memory
+        for (uint k = 0; k < 16; k++) {
+            sum += tile_a[gl_LocalInvocationID.y][k] * tile_b[k][gl_LocalInvocationID.x];
+        }
+        
+        barrier();
+    }
+    
+    // Store result
+    uint c_idx = row * N + col;
+    matrix_c[c_idx] = int8_t(clamp(sum * 128.0, -128.0, 127.0));
+}

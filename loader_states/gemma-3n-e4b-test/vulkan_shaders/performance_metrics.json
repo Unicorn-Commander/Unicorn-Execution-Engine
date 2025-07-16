@@ -1,0 +1,64 @@
+{
+  "gpu_config": {
+    "device_name": "AMD Radeon 780M",
+    "compute_units": 12,
+    "max_compute_units": 12,
+    "peak_performance": 2899102924.8,
+    "memory_size": 17179869184,
+    "memory_bandwidth": 96207267430.4,
+    "local_memory_size": 65536,
+    "max_workgroup_size": 1024,
+    "optimal_workgroup_size": [
+      256,
+      1,
+      1
+    ],
+    "precision_support": [
+      "FP32",
+      "FP16",
+      "INT8",
+      "INT4"
+    ],
+    "vulkan_version": "1.3",
+    "spirv_version": "1.6",
+    "subgroup_size": 64,
+    "max_push_constants": 256
+  },
+  "ffn_config": {
+    "hidden_size": 3072,
+    "intermediate_size": 8192,
+    "precision": "INT4",
+    "elastic_enabled": true,
+    "workgroup_size": [
+      256,
+      1,
+      1
+    ]
+  },
+  "performance_metrics": {
+    "shader_compilation_time": {
+      "gate_projection": 0.5074338912963867,
+      "up_projection": 0.5027997493743896,
+      "down_projection": 0.502953052520752,
+      "fused_gate_up": 0.5032148361206055
+    },
+    "shader_execution_time": {
+      "gate_projection": 0.13059449195861816
+    },
+    "memory_usage": {
+      "vulkan_shaders/gemma-3n-e4b-ffn/gate_projection.spv": 56098816
+    },
+    "throughput": {
+      "gate_projection": 3920.5328825218667
+    },
+    "gpu_utilization": {
+      "vulkan_shaders/gemma-3n-e4b-ffn/gate_projection.spv": 0.886530261427914
+    }
+  },
+  "compiled_shaders": [
+    "gate_projection",
+    "up_projection",
+    "down_projection",
+    "fused_gate_up"
+  ]
+}

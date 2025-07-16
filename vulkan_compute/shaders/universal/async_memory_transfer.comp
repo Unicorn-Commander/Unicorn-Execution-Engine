@@ -1,0 +1,67 @@
+#version 450
+
+// Async Memory Transfer Compute Shader
+// Optimized for overlapped NPU ↔ iGPU transfers
+// Uses Radeon 780M's high memory bandwidth efficiently
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Source buffer (e.g., from NPU)
+layout(set = 0, binding = 0, std430) restrict readonly buffer SourceBuffer {
+    uint source_data[];
+};
+
+// Destination buffer (e.g., to iGPU memory)
+layout(set = 0, binding = 1, std430) restrict writeonly buffer DestBuffer {
+    uint dest_data[];
+};
+
+// Transfer metadata
+layout(push_constant) uniform TransferParams {
+    uint transfer_size;
+    uint source_offset;
+    uint dest_offset;
+    uint chunk_size;
+    uint prefetch_ahead;
+} params;
+
+// Shared memory for efficient transfers
+shared uint shared_cache[256];
+
+void main() {
+    uint global_id = gl_GlobalInvocationID.x;
+    uint local_id = gl_LocalInvocationID.x;
+    
+    // Bounds check
+    if (global_id >= params.transfer_size) {
+        return;
+    }
+    
+    // Calculate transfer indices
+    uint src_idx = params.source_offset + global_id;
+    uint dst_idx = params.dest_offset + global_id;
+    
+    // Load to shared memory for coalescing
+    if (src_idx < textureSize(SourceBuffer, 0)) {
+        shared_cache[local_id] = source_data[src_idx];
+    } else {
+        shared_cache[local_id] = 0;
+    }
+    
+    // Sync workgroup
+    barrier();
+    
+    // Write from shared memory to destination
+    if (dst_idx < textureSize(DestBuffer, 0)) {
+        dest_data[dst_idx] = shared_cache[local_id];
+    }
+    
+    // Prefetch next chunk (if enabled)
+    if (params.prefetch_ahead > 0 && local_id == 0) {
+        uint prefetch_idx = src_idx + params.chunk_size;
+        if (prefetch_idx < textureSize(SourceBuffer, 0)) {
+            // Hint for prefetching (GPU-specific optimization)
+            uint prefetch_data = source_data[prefetch_idx];
+        }
+    }
+}

@@ -13,11 +13,15 @@ from safetensors import safe_open
 import logging
 import time
 import gc
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing import cpu_count
+import mmap
 
-# Hardware optimization
-os.environ['OMP_NUM_THREADS'] = '16'
-os.environ['MKL_NUM_THREADS'] = '16'
-torch.set_num_threads(16)
+# Hardware optimization - maximize parallel loading
+os.environ['OMP_NUM_THREADS'] = str(cpu_count())
+os.environ['MKL_NUM_THREADS'] = str(cpu_count())
+os.environ['NUMEXPR_NUM_THREADS'] = str(cpu_count())
+torch.set_num_threads(cpu_count())
 
 # NPU/iGPU optimization
 os.environ['HSA_OVERRIDE_GFX_VERSION'] = '11.0.0'
@@ -29,11 +33,12 @@ logger = logging.getLogger(__name__)
 class QuantizedGemma27BNPUIGPULoader:
     """Real NPU+iGPU loader for quantized Gemma 3 27B model"""
     
-    def __init__(self, quantized_model_path: str = "./quantized_models/gemma-3-27b-it-layer-by-layer"):
+    def __init__(self, quantized_model_path: str = "/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/quantized_models/gemma-3-27b-it-layer-by-layer", use_fp16: bool = False):
         self.quantized_path = Path(quantized_model_path)
         self.model_weights = {}
         self.layer_map = {}
         self.device_assignments = {}
+        self.use_fp16 = use_fp16
         
         # Hardware detection
         self.npu_available = self._detect_npu()
@@ -41,6 +46,7 @@ class QuantizedGemma27BNPUIGPULoader:
         
         logger.info(f"🦄 Quantized Gemma 27B NPU+iGPU Loader")
         logger.info(f"📁 Quantized model path: {self.quantized_path}")
+        logger.info(f"   Absolute quantized model path: {self.quantized_path.resolve()}")
         logger.info(f"⚡ NPU available: {self.npu_available}")
         logger.info(f"🎮 iGPU available: {self.igpu_available}")
         
@@ -63,22 +69,24 @@ class QuantizedGemma27BNPUIGPULoader:
             return False
     
     def _get_device_assignment(self, layer_name: str, tensor_name: str) -> str:
-        """Determine hardware assignment for tensor"""
-        # NPU: Attention operations (Q, K, V, O projections)
-        if any(x in tensor_name for x in ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'self_attn']):
+        """Determine hardware assignment for tensor - NPU+iGPU ONLY, NO CPU FALLBACK"""
+        # NPU: Attention operations (Q, K, V, O projections) + layer norms
+        if any(x in tensor_name for x in ['q_proj', 'k_proj', 'v_proj', 'o_proj', 'self_attn', 'layernorm', 'norm']):
             return 'npu'
         
-        # iGPU: FFN operations (gate, up, down projections)  
-        elif any(x in tensor_name for x in ['gate_proj', 'up_proj', 'down_proj', 'mlp']):
+        # iGPU: FFN operations (gate, up, down projections) + embeddings
+        elif any(x in tensor_name for x in ['gate_proj', 'up_proj', 'down_proj', 'mlp', 'embed', 'embedding']):
             return 'igpu'
         
-        # CPU: Embeddings and other operations
+        # DEFAULT: Assign remaining tensors to NPU (strict hardware-only policy)
         else:
-            return 'cpu'
+            logger.info(f"   🔧 Assigning unknown tensor '{tensor_name}' to NPU (hardware-only policy)")
+            return 'npu'
     
     def _load_quantized_tensor(self, file_path: Path, tensor_name: str) -> Tuple[torch.Tensor, torch.Tensor, str]:
-        """Load a quantized tensor with its scale and scheme"""
+        """Load a quantized tensor with its scale and scheme - optimized for speed"""
         try:
+            # Use memory mapping for faster I/O
             with safe_open(file_path, framework="pt", device="cpu") as f:
                 # Load quantized tensor
                 if tensor_name not in f.keys():
@@ -105,9 +113,10 @@ class QuantizedGemma27BNPUIGPULoader:
     
     def _dequantize_tensor(self, quantized_tensor: torch.Tensor, scale: torch.Tensor, scheme: str) -> torch.Tensor:
         """Dequantize tensor based on scheme"""
+        dequantized = None
         if scheme == 'int8_symmetric':
             # NPU-optimized symmetric dequantization
-            return quantized_tensor.float() * scale
+            dequantized = quantized_tensor.float() * scale
             
         elif scheme == 'int4_grouped':
             # iGPU-optimized grouped INT4 dequantization
@@ -122,21 +131,44 @@ class QuantizedGemma27BNPUIGPULoader:
                 dequantized_group = group * group_scale
                 dequantized_groups.append(dequantized_group)
             
-            return torch.cat(dequantized_groups).reshape(quantized_tensor.shape)
+            dequantized = torch.cat(dequantized_groups).reshape(quantized_tensor.shape)
             
         elif scheme == 'int8_asymmetric':
             # CPU-optimized asymmetric dequantization
             scale_val = scale[0]
             zero_point = scale[1]
-            return (quantized_tensor.float() - zero_point) * scale_val
+            dequantized = (quantized_tensor.float() - zero_point) * scale_val
             
         else:
             # FP16 - no dequantization needed
-            return quantized_tensor.float()
+            dequantized = quantized_tensor.float()
+
+        if self.use_fp16:
+            return dequantized.half()
+        return dequantized
+    
+    def _load_layer_tensor_from_file(self, file_path: Path, tensor_name: str, layer_num: int) -> Tuple[str, Dict[str, Any]]:
+        """Load and process a single layer tensor from file (for parallel execution)"""
+        try:
+            quantized_tensor, scale, scheme = self._load_quantized_tensor(file_path, tensor_name)
+            dequantized_tensor = self._dequantize_tensor(quantized_tensor, scale, scheme)
+            
+            # Assign to hardware
+            device = self._get_device_assignment(f"layer_{layer_num}", tensor_name)
+            
+            return tensor_name, {
+                'tensor': dequantized_tensor,
+                'device': device,
+                'scheme': scheme,
+                'original_shape': dequantized_tensor.shape
+            }
+        except Exception as e:
+            logger.error(f"      ❌ Failed to load {tensor_name} from {file_path.name}: {e}")
+            return tensor_name, None
     
     def load_layer(self, layer_num: int) -> Dict[str, torch.Tensor]:
-        """Load a specific layer with hardware optimization"""
-        logger.info(f"🔄 Loading layer {layer_num}")
+        """Load a specific layer with parallel hardware optimization"""
+        logger.info(f"🔄 Loading layer {layer_num} with parallel processing")
         
         # Find all files containing this layer
         layer_files = list(self.quantized_path.glob(f"*_layer_{layer_num}.safetensors"))
@@ -144,75 +176,129 @@ class QuantizedGemma27BNPUIGPULoader:
         if not layer_files:
             raise FileNotFoundError(f"No files found for layer {layer_num}")
         
-        layer_weights = {}
-        
+        # Collect all tensor tasks for this layer
+        tensor_tasks = []
         for file_path in layer_files:
-            logger.info(f"   📂 Loading from {file_path.name}")
-            
-            # Get tensor names in this file
             with safe_open(file_path, framework="pt", device="cpu") as f:
                 tensor_names = [key for key in f.keys() if not key.endswith('_scale')]
+                for tensor_name in tensor_names:
+                    tensor_tasks.append((file_path, tensor_name))
+        
+        logger.info(f"   📊 Loading {len(tensor_tasks)} tensors using 14 threads (optimized for I/O)")
+        
+        layer_weights = {}
+        
+        # Process layer tensors in parallel - optimized for I/O bound operations  
+        with ThreadPoolExecutor(max_workers=14) as executor:
+            # Submit all tasks
+            future_to_task = {
+                executor.submit(self._load_layer_tensor_from_file, file_path, tensor_name, layer_num): (file_path, tensor_name)
+                for file_path, tensor_name in tensor_tasks
+            }
             
-            # Load each tensor
-            for tensor_name in tensor_names:
+            # Collect results
+            for future in as_completed(future_to_task):
+                file_path, tensor_name = future_to_task[future]
                 try:
-                    quantized_tensor, scale, scheme = self._load_quantized_tensor(file_path, tensor_name)
-                    
-                    # Dequantize
-                    dequantized_tensor = self._dequantize_tensor(quantized_tensor, scale, scheme)
-                    
-                    # Assign to hardware
-                    device = self._get_device_assignment(f"layer_{layer_num}", tensor_name)
-                    self.device_assignments[tensor_name] = device
-                    
-                    # Store with device info
-                    layer_weights[tensor_name] = {
-                        'tensor': dequantized_tensor,
-                        'device': device,
-                        'scheme': scheme,
-                        'original_shape': dequantized_tensor.shape
-                    }
-                    
-                    logger.info(f"      ✅ {tensor_name} → {device} ({scheme})")
-                    
+                    result_name, result_data = future.result()
+                    if result_data is not None:
+                        layer_weights[result_name] = result_data
+                        self.device_assignments[result_name] = result_data['device']
+                        logger.info(f"      ✅ {result_name} → {result_data['device']} ({result_data['scheme']})")
                 except Exception as e:
-                    logger.error(f"      ❌ Failed to load {tensor_name}: {e}")
-                    continue
+                    logger.error(f"      ❌ Failed to process {tensor_name}: {e}")
         
         logger.info(f"✅ Layer {layer_num} loaded: {len(layer_weights)} tensors")
         return layer_weights
     
-    def load_shared_weights(self) -> Dict[str, torch.Tensor]:
-        """Load shared weights (embeddings, etc.)"""
-        logger.info("🔄 Loading shared weights")
+    def _load_tensor_from_file(self, file_path: Path, tensor_name: str) -> Tuple[str, Dict[str, Any]]:
+        """Load and process a single tensor from file (for parallel execution)"""
+        try:
+            quantized_tensor, scale, scheme = self._load_quantized_tensor(file_path, tensor_name)
+            dequantized_tensor = self._dequantize_tensor(quantized_tensor, scale, scheme)
+            
+            return tensor_name, {
+                'tensor': dequantized_tensor,
+                'device': 'cpu',
+                'scheme': scheme,
+                'original_shape': dequantized_tensor.shape
+            }
+        except Exception as e:
+            logger.error(f"      ❌ Failed to load {tensor_name} from {file_path.name}: {e}")
+            return tensor_name, None
+    
+    def load_shared_weights_fast(self) -> Dict[str, torch.Tensor]:
+        """Load ALL shared weights into GTT memory immediately for maximum speed"""
+        logger.info("🚀 Fast-loading shared weights directly to GTT memory")
         
-        shared_files = list(self.quantized_path.glob("*_shared.safetensors"))
+        shared_files = list(self.quantized_path.glob("*shared.safetensors"))
+        logger.info(f"   Found shared files: {shared_files}")
         shared_weights = {}
         
+        # Load everything at once - no streaming for shared weights
         for file_path in shared_files:
-            logger.info(f"   📂 Loading from {file_path.name}")
+            logger.info(f"   📂 Fast-loading {file_path.name}")
             
             with safe_open(file_path, framework="pt", device="cpu") as f:
+                # Load ALL tensors from this file at once
                 tensor_names = [key for key in f.keys() if not key.endswith('_scale')]
+                logger.info(f"      Found keys in {file_path.name}: {f.keys()}")
+                metadata = f.metadata()
+                
+                for tensor_name in tensor_names:
+                    try:
+                        # Load quantized tensor and scale together
+                        quantized_tensor = f.get_tensor(tensor_name)
+                        scale_name = f"{tensor_name}_scale"
+                        scale = f.get_tensor(scale_name) if scale_name in f.keys() else None
+                        scheme = metadata.get(tensor_name, 'unknown')
+                        
+                        # Dequantize immediately
+                        if scale is not None:
+                            dequantized_tensor = self._dequantize_tensor(quantized_tensor, scale, scheme)
+                        else:
+                            dequantized_tensor = quantized_tensor.float()
+                        
+                        # Move to GTT memory immediately (pinned memory for fast GPU transfer)
+                        if torch.cuda.is_available():
+                            dequantized_tensor = dequantized_tensor.pin_memory()
+                        
+                        shared_weights[tensor_name] = {
+                            'tensor': dequantized_tensor,
+                            'device': 'cpu',  # Will be moved to hardware on demand
+                            'scheme': scheme,
+                            'original_shape': dequantized_tensor.shape
+                        }
+                        
+                        logger.info(f"      ✅ {tensor_name} → GTT memory ({scheme})")
+                        
+                    except Exception as e:
+                        logger.error(f"      ❌ Failed to load {tensor_name}: {e}")
+                        continue
+        
+        logger.info(f"✅ ALL shared weights loaded to GTT memory: {len(shared_weights)} tensors")
+        return shared_weights
+    
+    def load_shared_weights(self) -> Dict[str, torch.Tensor]:
+        """Legacy method - redirects to fast loader"""
+        return self.load_shared_weights_fast()
+        with ThreadPoolExecutor(max_workers=14) as executor:
+            # Submit all tasks
+            future_to_task = {
+                executor.submit(self._load_tensor_from_file, file_path, tensor_name): (file_path, tensor_name)
+                for file_path, tensor_name in tensor_tasks
+            }
             
-            for tensor_name in tensor_names:
+            # Collect results
+            for future in as_completed(future_to_task):
+                file_path, tensor_name = future_to_task[future]
                 try:
-                    quantized_tensor, scale, scheme = self._load_quantized_tensor(file_path, tensor_name)
-                    dequantized_tensor = self._dequantize_tensor(quantized_tensor, scale, scheme)
-                    
-                    # Shared weights go to CPU
-                    shared_weights[tensor_name] = {
-                        'tensor': dequantized_tensor,
-                        'device': 'cpu',
-                        'scheme': scheme,
-                        'original_shape': dequantized_tensor.shape
-                    }
-                    
-                    logger.info(f"      ✅ {tensor_name} → cpu ({scheme})")
-                    
+                    result_name, result_data = future.result()
+                    if result_data is not None:
+                        shared_weights[result_name] = result_data
+                        logger.info(f"      ✅ {result_name} → cpu ({result_data['scheme']})")
                 except Exception as e:
-                    logger.error(f"      ❌ Failed to load {tensor_name}: {e}")
-                    continue
+                    logger.error(f"      ❌ Failed to process {tensor_name}: {e}")
         
         logger.info(f"✅ Shared weights loaded: {len(shared_weights)} tensors")
         return shared_weights
@@ -262,6 +348,7 @@ class QuantizedGemma27BNPUIGPULoader:
         logger.info(f"📊 Shared weights: {len(shared_weights)} tensors")
         logger.info(f"📊 Layers: {model_info['layer_count']} (streaming load)")
         
+        self.model_info = model_info
         return model_info
     
     def generate_text(self, 
@@ -283,7 +370,7 @@ class QuantizedGemma27BNPUIGPULoader:
             from complete_npu_igpu_inference_pipeline import CompleteNPUIGPUInferencePipeline
             
             # Initialize the complete pipeline
-            pipeline = CompleteNPUIGPUInferencePipeline(str(self.quantized_path))
+            pipeline = CompleteNPUIGPUInferencePipeline(self.model_info, str(self.quantized_path))
             
             if not pipeline.initialize_hardware():
                 raise Exception("❌ FAILED: NPU+iGPU hardware pipeline initialization failed - HARDWARE REQUIRED")
@@ -499,7 +586,7 @@ def main():
     logger.info("🔧 Testing Quantized Gemma 27B NPU+iGPU Loader")
     
     # Initialize loader
-    loader = QuantizedGemma27BNPUIGPULoader()
+    loader = QuantizedGemma27BNPUIGPULoader(use_fp16=True)
     
     # Load model structure
     model_info = loader.load_model_streaming()

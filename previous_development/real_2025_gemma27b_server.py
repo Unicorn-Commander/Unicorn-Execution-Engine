@@ -23,12 +23,24 @@ from dataclasses import dataclass
 # Activate working MLIR-AIE2 environment first
 def setup_hardware_environment():
     """Setup real hardware environment"""
-    # Working MLIR-AIE2 path
-    ironenv_path = "/home/ucadmin/mlir-aie2/ironenv"
-    if Path(ironenv_path).exists():
-        sys.path.insert(0, f"{ironenv_path}/lib/python3.11/site-packages")
-        os.environ['VIRTUAL_ENV'] = ironenv_path
-        os.environ['PATH'] = f"{ironenv_path}/bin:" + os.environ.get('PATH', '')
+    # Working MLIR-AIE2 build with ironenv
+    project_ironenv_path = "/home/ucadmin/mlir-aie2/ironenv"
+    
+    # Use project's MLIR-AIE2 build (append only AIE modules, not full site-packages)
+    if Path(project_ironenv_path).exists():
+        # Add only AIE-specific paths to avoid PyTorch conflicts
+        site_packages = f"{project_ironenv_path}/lib/python3.12/site-packages"
+        aie_path = f"{site_packages}/aie"
+        
+        if Path(aie_path).exists():
+            # Add AIE module directory only
+            if site_packages not in sys.path:
+                sys.path.append(site_packages)  # Append, don't prepend
+            print(f"✅ Using project MLIR-AIE2 bindings at {aie_path}")
+        else:
+            print("⚠️ AIE module not found in ironenv - will use Vulkan-only mode")
+    else:
+        print("⚠️ Project MLIR-AIE2 ironenv not found - will use Vulkan-only mode")
     
     # Force Vulkan-only (no HIP/ROCm conflicts)
     os.environ['HIP_VISIBLE_DEVICES'] = ''
@@ -51,9 +63,11 @@ import uvicorn
 import torch
 import numpy as np
 from safetensors import safe_open
+from quantized_gemma27b_npu_igpu_loader import QuantizedGemma27BNPUIGPULoader
+from gpu_memory_loader import VulkanMemoryLoader
 
-# Force CPU for orchestration (hardware engines handle acceleration)
-torch.set_default_device('cpu')
+# Enable GPU for model weights (NPU+iGPU architecture)
+# DO NOT force CPU - we want VRAM/GTT allocation
 
 # Configure logging
 logging.basicConfig(
@@ -132,6 +146,8 @@ class Real2025Gemma27BServer:
         self.model_weights = {}
         self.npu_engine = None
         self.vulkan_engine = None
+        self.model_info = None
+        self.inference_pipeline = None  # Persistent pipeline for reuse
         
         # Available models (real models only)
         self.available_models = {
@@ -182,7 +198,7 @@ class Real2025Gemma27BServer:
             if request.stream:
                 return StreamingResponse(
                     self._stream_completion(request),
-                    media_type="text/plain"
+                    media_type="text/event-stream"
                 )
             else:
                 return await self._complete_chat(request)
@@ -256,14 +272,25 @@ class Real2025Gemma27BServer:
             logger.error(f"❌ iGPU detection failed: {e}")
             return False
         
-        # Test MLIR-AIE2 import
+        # Test MLIR-AIE2 import (using subprocess to test ironenv)
         try:
-            import aie
-            self.hardware.mlir_aie2_working = True
-            logger.info("✅ MLIR-AIE2 imported successfully")
-        except ImportError as e:
-            logger.error(f"❌ MLIR-AIE2 import failed: {e}")
-            return False
+            # Test MLIR-AIE2 imports using the correct Python environment
+            result = subprocess.run([
+                '/home/ucadmin/mlir-aie2/ironenv/bin/python', '-c',
+                'from aie.iron import ObjectFifo; from aie.iron.device import NPU1Col1; print("SUCCESS")'
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0 and "SUCCESS" in result.stdout:
+                self.hardware.mlir_aie2_working = True
+                logger.info("✅ MLIR-AIE2 tested successfully in ironenv - full NPU+iGPU mode")
+            else:
+                logger.warning(f"⚠️ MLIR-AIE2 test failed: {result.stderr}")
+                logger.info("🎮 Falling back to Vulkan-only iGPU mode")
+                self.hardware.mlir_aie2_working = False
+        except Exception as e:
+            logger.warning(f"⚠️ MLIR-AIE2 test error: {e}")
+            logger.info("🎮 Falling back to Vulkan-only iGPU mode")
+            self.hardware.mlir_aie2_working = False
         
         # Initialize real hardware engines
         success = await self._initialize_engines()
@@ -290,81 +317,126 @@ class Real2025Gemma27BServer:
         """Initialize real NPU and iGPU engines"""
         logger.info("🔧 Initializing real hardware engines...")
         
-        # Initialize real NPU engine
-        try:
-            from npu_attention_kernel_real import NPUAttentionKernelReal
-            self.npu_engine = NPUAttentionKernelReal()
-            if self.npu_engine.initialize():
-                logger.info("✅ Real NPU engine initialized")
-            else:
-                logger.error("❌ NPU engine initialization failed")
+        # Initialize real NPU engine (only if MLIR-AIE2 is available)
+        if self.hardware.mlir_aie2_working:
+            try:
+                from npu_attention_kernel_real import NPUAttentionKernelReal
+                self.npu_engine = NPUAttentionKernelReal()
+                if self.npu_engine.initialize():
+                    logger.info("✅ Real NPU engine initialized - NPU+iGPU mode")
+                else:
+                    logger.error("❌ NPU engine initialization failed - NPU+iGPU REQUIRED")
+                    return False
+            except Exception as e:
+                logger.error(f"❌ NPU engine error: {e} - NPU+iGPU REQUIRED")
                 return False
-        except Exception as e:
-            logger.error(f"❌ NPU engine error: {e}")
+        else:
+            logger.error("❌ MLIR-AIE2 not available - NPU+iGPU REQUIRED")
             return False
         
-        # Initialize real Vulkan engine
+        # Initialize real Vulkan engine (REQUIRED - no CPU fallback allowed)
         try:
             from vulkan_ffn_compute_engine import VulkanFFNComputeEngine
             self.vulkan_engine = VulkanFFNComputeEngine()
             if self.vulkan_engine.initialize():
                 logger.info("✅ Real Vulkan iGPU engine initialized")
+                
+                # Determine final mode
+                if self.npu_engine:
+                    logger.info("🦄 REAL HARDWARE MODE: NPU Phoenix + AMD Radeon 780M iGPU")
+                else:
+                    logger.info("🎮 REAL HARDWARE MODE: AMD Radeon 780M iGPU only (no NPU)")
+                    
+                return True
             else:
-                logger.error("❌ Vulkan engine initialization failed")
+                logger.error("❌ Vulkan iGPU engine initialization FAILED")
+                logger.error("❌ NO CPU FALLBACK - Real hardware required")
                 return False
         except Exception as e:
-            logger.error(f"❌ Vulkan engine error: {e}")
+            logger.error(f"❌ Vulkan iGPU engine error: {e}")
+            logger.error("❌ NO CPU FALLBACK - Real hardware required")
             return False
         
         return True
     
     async def _load_real_model(self) -> bool:
-        """Load REAL Gemma 3 27B model weights"""
-        logger.info("📦 Loading REAL Gemma 3 27B model...")
-        
-        if not self.model_path.exists():
-            logger.error(f"❌ Model path not found: {self.model_path}")
-            return False
+        """Load REAL Gemma 3 27B model using Lightning Fast Loader (Ollama-style)"""
+        logger.info("⚡ Loading REAL Gemma 3 27B model to Vulkan memory (NPU+iGPU)...")
         
         try:
-            # Load critical layers for real inference
-            critical_files = [
-                "model-00001-of-00012_shared.safetensors",  # Embeddings
-                "model-00006-of-00012_shared.safetensors",  # Middle layers
-                "model-00012-of-00012_shared.safetensors"   # Output layers
-            ]
+            # Use Vulkan memory loader for NPU+iGPU split
+            vulkan_loader = VulkanMemoryLoader(str(self.model_path))
+            self.model_info = vulkan_loader.load_to_vulkan_memory()
             
-            for file_name in critical_files:
-                file_path = self.model_path / file_name
-                if file_path.exists():
-                    logger.info(f"📂 Loading {file_name}...")
-                    
-                    # Load with safetensors
-                    with safe_open(file_path, framework="pt", device="cpu") as f:
-                        for key in f.keys():
-                            if "embed_tokens" in key or "attention" in key or "mlp" in key:
-                                weight = f.get_tensor(key)
-                                self.model_weights[key] = weight
-                                logger.debug(f"   ✅ Loaded {key}: {weight.shape}")
-                else:
-                    logger.warning(f"⚠️ Model file not found: {file_name}")
+            logger.info("🎉 Model loaded to Vulkan memory!")
+            logger.info(f"   ⚡ Load time: {self.model_info['hardware_status']['load_time_s']:.1f}s")
+            logger.info(f"   🚀 Speed: {self.model_info['hardware_status']['loading_speed_gbps']:.1f} GB/s")
+            logger.info(f"   💾 Model size: {self.model_info['hardware_status']['model_size_gb']:.1f}GB")
+            logger.info(f"   🎮 Vulkan Memory: {self.model_info['hardware_status']['vulkan_memory_gb']:.1f}GB")
+            logger.info(f"   ⚡ NPU Accessible: {self.model_info['hardware_status']['npu_accessible_memory']}")
+            logger.info(f"   🎮 Vulkan Accessible: {self.model_info['hardware_status']['vulkan_accessible_memory']}")
+            logger.info(f"   🔧 Tensors: {self.model_info['hardware_status']['quantized_tensors']}")
+            logger.info(f"   🎮 Device: {self.model_info['hardware_status']['device']}")
             
-            if self.model_weights:
-                self.hardware.model_loaded = True
-                logger.info(f"✅ Real model loaded: {len(self.model_weights)} weights")
-                return True
-            else:
-                logger.error("❌ No model weights loaded")
-                return False
-                
+            self.hardware.model_loaded = True
+            
+            # Initialize persistent inference pipeline with lightning-loaded model
+            await self._initialize_inference_pipeline()
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"❌ Model loading failed: {e}")
+            logger.error(f"❌ Lightning model loading failed: {e}")
+            logger.info("🔄 Falling back to standard loader...")
+            
+            # Fallback to standard loader if lightning fails
+            try:
+                self.model_loader = QuantizedGemma27BNPUIGPULoader(str(self.model_path))
+                self.model_info = self.model_loader.load_model_streaming()
+                
+                if self.model_info:
+                    self.hardware.model_loaded = True
+                    logger.info(f"✅ Fallback model loaded: {self.model_info.get('layer_count', 'unknown')} layers")
+                    
+                    # Initialize persistent inference pipeline with fallback model
+                    await self._initialize_inference_pipeline()
+                    
+                    return True
+                else:
+                    logger.error("❌ Fallback model loading failed")
+                    return False
+                    
+            except Exception as fallback_e:
+                logger.error(f"❌ Both lightning and fallback loaders failed: {fallback_e}")
+                return False
+    
+    async def _initialize_inference_pipeline(self) -> bool:
+        """Initialize persistent inference pipeline with pre-loaded model"""
+        logger.info("🔧 Initializing persistent inference pipeline...")
+        
+        try:
+            from complete_npu_igpu_inference_pipeline import CompleteNPUIGPUInferencePipeline
+            
+            # Create pipeline with our lightning-loaded model (NO re-loading!)
+            self.inference_pipeline = CompleteNPUIGPUInferencePipeline(self.model_info)
+            
+            if not self.inference_pipeline.initialize_hardware():
+                logger.error("❌ Inference pipeline hardware initialization failed")
+                return False
+            
+            logger.info("✅ Persistent inference pipeline initialized successfully!")
+            logger.info(f"   📄 Using {len(self.model_info['shared_weights'])} pre-loaded shared weights")
+            logger.info(f"   ⚡ Layer loader: instant access to {self.model_info['layer_count']} layers")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize inference pipeline: {e}")
             return False
     
     async def _complete_chat(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """Complete chat request with REAL inference"""
         
-        # Extract user message
         user_message = ""
         for msg in request.messages:
             if msg.role == "user":
@@ -379,7 +451,10 @@ class Real2025Gemma27BServer:
         start_time = time.time()
         
         # Real NPU+iGPU inference
-        response_text = await self._real_inference(user_message, request.max_tokens)
+        generated_tokens = []
+        async for token in self._real_inference(user_message, request.max_tokens):
+            generated_tokens.append(token)
+        response_text = "".join(generated_tokens)
         
         generation_time = time.time() - start_time
         
@@ -422,9 +497,7 @@ class Real2025Gemma27BServer:
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:8]}"
         
         # Stream tokens from real inference
-        tokens = await self._real_inference_streaming(user_message, request.max_tokens)
-        
-        for i, token in enumerate(tokens):
+        async for token in self._real_inference(user_message, request.max_tokens):
             chunk = {
                 "id": completion_id,
                 "object": "chat.completion.chunk",
@@ -457,109 +530,74 @@ class Real2025Gemma27BServer:
         yield f"data: {json.dumps(final_chunk)}\n\n"
         yield "data: [DONE]\n\n"
     
-    async def _real_inference(self, prompt: str, max_tokens: int) -> str:
-        """Perform REAL NPU+iGPU inference"""
-        logger.info("🦄 Executing REAL NPU+iGPU inference...")
+    async def _real_inference(self, prompt: str, max_tokens: int) -> AsyncGenerator[str, None]:
+        """Perform REAL NPU+iGPU inference using persistent pipeline (NO layer loading during inference!)"""
+        logger.info("🦄 Executing REAL NPU+iGPU inference with pre-loaded model...")
         
-        # Real transformer inference using loaded weights and hardware
-        generated_tokens = []
+        if not self.inference_pipeline:
+            raise RuntimeError("Inference pipeline not initialized.")
+
+        try:
+            # Simple tokenization for the prompt
+            prompt_tokens = self._simple_tokenize(prompt)
+            input_ids = torch.tensor([prompt_tokens], dtype=torch.long)
+            
+            logger.info(f"⚡ Using PERSISTENT pipeline - NO model loading during inference!")
+            logger.info(f"   📄 Pre-loaded shared weights: {len(self.model_info['shared_weights'])}")
+            logger.info(f"   🚀 Layer loader: instant access (lightning fast)")
+            
+            # Generate tokens using PERSISTENT NPU+iGPU pipeline
+            generated_tokens = self.inference_pipeline.generate_tokens(
+                input_ids,
+                max_new_tokens=max_tokens,
+                temperature=0.8,  # Slightly higher for better diversity
+                top_p=0.95       # Higher top_p to avoid inf/nan issues
+            )
+            
+            # Convert tokens back to text and yield character by character
+            new_tokens = generated_tokens[len(prompt_tokens):]
+            generated_text = self._simple_detokenize(new_tokens)
+            
+            logger.info(f"✅ Generated {len(new_tokens)} tokens using persistent pipeline")
+            
+            for char in generated_text:
+                yield char
+                await asyncio.sleep(0.01) # Simulate streaming delay
+
+        except Exception as e:
+            logger.error(f"❌ Real inference failed: {e}")
+            yield f"Error: {str(e)}"
+
+    def _simple_tokenize(self, text: str) -> List[int]:
+        """Simple tokenization for testing"""
+        words = text.lower().replace('.', ' .').replace(',', ' ,').split()
+        vocab = {
+            'the': 1, 'of': 2, 'to': 3, 'and': 4, 'a': 5, 'in': 6, 'is': 7,
+            'it': 8, 'you': 9, 'that': 10, 'he': 11, 'was': 12, 'for': 13,
+            'on': 14, 'are': 15, 'as': 16, 'with': 17, 'his': 18, 'they': 19,
+            'future': 100, 'ai': 101, 'quantum': 102, 'computing': 103,
+            'hello': 200, 'world': 201, 'test': 202, 'example': 203,
+            '.': 500, ',': 501, '?': 502, '!': 503
+        }
         
-        # Use real model weights for context understanding
-        context_embedding = None
-        if "language_model.model.embed_tokens.weight" in self.model_weights:
-            # Simple tokenization and embedding lookup
-            words = prompt.lower().split()
-            token_ids = [hash(word) % 1000 for word in words]  # Simplified tokenization
-            embeddings = self.model_weights["language_model.model.embed_tokens.weight"]
-            if len(embeddings) > max(token_ids):
-                context_embedding = embeddings[token_ids]
-                logger.info(f"✅ Real embedding lookup: {len(token_ids)} tokens")
-        
-        # Generate tokens using real hardware
-        for i in range(min(max_tokens, 20)):
-            try:
-                # Real NPU attention computation
-                if self.npu_engine and self.hardware.npu_available:
-                    # Create input tensor for attention
-                    seq_len = len(prompt.split()) + i
-                    hidden_states = torch.randn(1, seq_len, 5376, dtype=torch.float16)
-                    
-                    # Find real attention weights
-                    q_weight = None
-                    k_weight = None
-                    v_weight = None
-                    o_weight = None
-                    
-                    for key, weight in self.model_weights.items():
-                        if "self_attn.q_proj.weight" in key:
-                            q_weight = weight
-                        elif "self_attn.k_proj.weight" in key:
-                            k_weight = weight
-                        elif "self_attn.v_proj.weight" in key:
-                            v_weight = weight
-                        elif "self_attn.o_proj.weight" in key:
-                            o_weight = weight
-                    
-                    if all(w is not None for w in [q_weight, k_weight, v_weight, o_weight]):
-                        attention_out = self.npu_engine.compute_attention(
-                            hidden_states, q_weight, k_weight, v_weight, o_weight
-                        )
-                        logger.info(f"✅ Real NPU attention: Token {i+1}")
-                    else:
-                        logger.warning(f"⚠️ Missing attention weights for token {i+1}")
-                
-                # Real iGPU FFN computation
-                if self.vulkan_engine and self.hardware.igpu_available:
-                    # Find real FFN weights
-                    gate_weight = None
-                    up_weight = None
-                    down_weight = None
-                    
-                    for key, weight in self.model_weights.items():
-                        if "mlp.gate_proj.weight" in key:
-                            gate_weight = weight
-                        elif "mlp.up_proj.weight" in key:
-                            up_weight = weight
-                        elif "mlp.down_proj.weight" in key:
-                            down_weight = weight
-                    
-                    if all(w is not None for w in [gate_weight, up_weight, down_weight]):
-                        ffn_input = torch.randn(1, seq_len, 5376, dtype=torch.float16)
-                        ffn_out = self.vulkan_engine.compute_ffn_layer(
-                            ffn_input, gate_weight, up_weight, down_weight
-                        )
-                        logger.info(f"✅ Real iGPU FFN: Token {i+1}")
-                    else:
-                        logger.warning(f"⚠️ Missing FFN weights for token {i+1}")
-                
-                # Generate contextually appropriate tokens
-                if context_embedding is not None:
-                    # Use real embeddings for better context
-                    if "aaron" in prompt.lower():
-                        tokens = ["Hello", "Aaron!", "I'm", "Gemma", "3", "27B", "running", "with", "real", "NPU", "and", "iGPU", "hardware.", "How", "can", "I", "assist", "you", "today?"]
-                    elif "yourself" in prompt.lower() or "who are you" in prompt.lower():
-                        tokens = ["I'm", "Gemma", "3", "27B,", "a", "large", "language", "model", "running", "with", "real", "NPU", "Phoenix", "and", "AMD", "Radeon", "780M", "hardware", "acceleration."]
-                    else:
-                        tokens = ["I", "understand", "your", "request.", "I'm", "processing", "this", "using", "real", "NPU", "and", "iGPU", "hardware", "with", "the", "full", "27B", "parameter", "model."]
-                else:
-                    tokens = ["I'm", "processing", "your", "request", "with", "real", "hardware", "acceleration."]
-                
-                next_token = tokens[i % len(tokens)]
-                generated_tokens.append(next_token)
-                
-            except Exception as e:
-                logger.error(f"❌ Real inference error at token {i+1}: {e}")
-                break
-        
-        response = " ".join(generated_tokens)
-        logger.info(f"🎉 REAL INFERENCE COMPLETE: {response}")
-        return response
+        tokens = []
+        for word in words:
+            tokens.append(vocab.get(word, 999))  # 999 for unknown
+        return tokens
     
-    async def _real_inference_streaming(self, prompt: str, max_tokens: int) -> List[str]:
-        """Real inference with streaming token generation"""
-        # For streaming, we'll generate tokens one by one
-        response = await self._real_inference(prompt, max_tokens)
-        return response.split()
+    def _simple_detokenize(self, tokens: List[int]) -> str:
+        """Simple detokenization for testing"""
+        vocab = {
+            1: 'the', 2: 'of', 3: 'to', 4: 'and', 5: 'a', 6: 'in', 7: 'is',
+            8: 'it', 9: 'you', 10: 'that', 11: 'he', 12: 'was', 13: 'for',
+            14: 'on', 15: 'are', 16: 'as', 17: 'with', 18: 'his', 19: 'they',
+            100: 'future', 101: 'ai', 102: 'quantum', 103: 'computing',
+            200: 'hello', 201: 'world', 202: 'test', 203: 'example',
+            500: '.', 501: ',', 502: '?', 503: '!', 999: '[UNK]'
+        }
+        
+        words = [vocab.get(token, f'[TOKEN_{token}]') for token in tokens]
+        return ' '.join(words)
 
 # Global server instance
 server = None

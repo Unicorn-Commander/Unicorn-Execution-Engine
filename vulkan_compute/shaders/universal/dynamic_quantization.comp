@@ -1,0 +1,181 @@
+#version 450
+
+// Dynamic Quantization Compute Shader
+// Performs runtime FP16 → INT4 quantization
+// Optimized for maintaining quality while maximizing compression
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+// Input FP16 data
+layout(set = 0, binding = 0, std430) restrict readonly buffer InputFP16 {
+    float input_fp16[];
+};
+
+// Output INT4 data (packed)
+layout(set = 0, binding = 1, std430) restrict writeonly buffer OutputINT4 {
+    uint output_int4[];
+};
+
+// Scale factors output
+layout(set = 0, binding = 2, std430) restrict writeonly buffer ScalesOutput {
+    float scales[];
+};
+
+// Zero points output  
+layout(set = 0, binding = 3, std430) restrict writeonly buffer ZeroPointsOutput {
+    int zero_points[];
+};
+
+layout(push_constant) uniform QuantParams {
+    uint tensor_size;
+    uint group_size;
+    uint quantization_type;  // 0=symmetric, 1=asymmetric
+    uint precision_bits;     // 4 for INT4, 2 for INT2
+} qparams;
+
+// Shared memory for reduction operations
+shared float shared_data[64];
+shared float shared_min[64];
+shared float shared_max[64];
+
+float find_group_max(uint group_start, uint group_end) {
+    uint local_id = gl_LocalInvocationID.x;
+    uint group_id = gl_WorkGroupID.x;
+    
+    float local_max = -3.402823e+38;  // -FLT_MAX
+    
+    // Each thread finds local max
+    for (uint i = group_start + local_id; i < group_end; i += gl_WorkGroupSize.x) {
+        if (i < qparams.tensor_size) {
+            local_max = max(local_max, abs(input_fp16[i]));
+        }
+    }
+    
+    shared_data[local_id] = local_max;
+    barrier();
+    
+    // Reduction to find group max
+    for (uint stride = gl_WorkGroupSize.x / 2; stride > 0; stride /= 2) {
+        if (local_id < stride) {
+            shared_data[local_id] = max(shared_data[local_id], shared_data[local_id + stride]);
+        }
+        barrier();
+    }
+    
+    return shared_data[0];
+}
+
+void find_group_min_max(uint group_start, uint group_end, out float group_min, out float group_max) {
+    uint local_id = gl_LocalInvocationID.x;
+    
+    float local_min = 3.402823e+38;   // FLT_MAX
+    float local_max = -3.402823e+38;  // -FLT_MAX
+    
+    // Each thread finds local min/max
+    for (uint i = group_start + local_id; i < group_end; i += gl_WorkGroupSize.x) {
+        if (i < qparams.tensor_size) {
+            float val = input_fp16[i];
+            local_min = min(local_min, val);
+            local_max = max(local_max, val);
+        }
+    }
+    
+    shared_min[local_id] = local_min;
+    shared_max[local_id] = local_max;
+    barrier();
+    
+    // Reduction
+    for (uint stride = gl_WorkGroupSize.x / 2; stride > 0; stride /= 2) {
+        if (local_id < stride) {
+            shared_min[local_id] = min(shared_min[local_id], shared_min[local_id + stride]);
+            shared_max[local_id] = max(shared_max[local_id], shared_max[local_id + stride]);
+        }
+        barrier();
+    }
+    
+    group_min = shared_min[0];
+    group_max = shared_max[0];
+}
+
+uint pack_int4_values(ivec4 values) {
+    // Clamp to INT4 range and pack
+    uvec4 clamped = uvec4(clamp(values, -8, 7) + 8);  // Shift to 0-15 range
+    return (clamped.x) | (clamped.y << 4) | (clamped.z << 8) | (clamped.w << 12);
+}
+
+uint pack_int2_values(ivec4 values) {
+    // Clamp to INT2 range and pack (8 values per uint)
+    uvec4 clamped = uvec4(clamp(values, -2, 1) + 2);  // Shift to 0-3 range
+    return (clamped.x) | (clamped.y << 2) | (clamped.z << 4) | (clamped.w << 6);
+}
+
+void main() {
+    uint global_id = gl_GlobalInvocationID.x;
+    uint group_id = gl_WorkGroupID.x;
+    uint local_id = gl_LocalInvocationID.x;
+    
+    // Calculate group boundaries
+    uint group_start = group_id * qparams.group_size;
+    uint group_end = min(group_start + qparams.group_size, qparams.tensor_size);
+    
+    if (group_start >= qparams.tensor_size) {
+        return;
+    }
+    
+    // Calculate quantization parameters for this group
+    float scale;
+    int zero_point = 0;
+    
+    if (qparams.quantization_type == 0) {
+        // Symmetric quantization
+        float group_max = find_group_max(group_start, group_end);
+        float max_int = pow(2.0, float(qparams.precision_bits - 1)) - 1.0;  // e.g., 7 for INT4
+        scale = group_max / max_int;
+    } else {
+        // Asymmetric quantization
+        float group_min, group_max;
+        find_group_min_max(group_start, group_end, group_min, group_max);
+        
+        float range = group_max - group_min;
+        float max_uint = pow(2.0, float(qparams.precision_bits)) - 1.0;  // e.g., 15 for INT4
+        scale = range / max_uint;
+        zero_point = int(round(-group_min / scale));
+    }
+    
+    // Store scale and zero point (one per group)
+    if (local_id == 0) {
+        scales[group_id] = scale;
+        zero_points[group_id] = zero_point;
+    }
+    
+    barrier();
+    
+    // Quantize values in this group
+    uint elements_per_output = (qparams.precision_bits == 4) ? 8 : 16;  // INT4: 8 per uint, INT2: 16 per uint
+    uint output_idx = global_id / elements_per_output;
+    uint element_in_output = global_id % elements_per_output;
+    
+    if (global_id < qparams.tensor_size && element_in_output < 4) {  // Process 4 elements at a time
+        // Load 4 consecutive values
+        ivec4 quantized_values;
+        for (int i = 0; i < 4; i++) {
+            uint input_idx = global_id * 4 + i;
+            if (input_idx < qparams.tensor_size) {
+                float val = input_fp16[input_idx];
+                int quantized = int(round(val / scale)) + zero_point;
+                quantized_values[i] = quantized;
+            } else {
+                quantized_values[i] = zero_point;
+            }
+        }
+        
+        // Pack and store
+        if (qparams.precision_bits == 4) {
+            uint packed = pack_int4_values(quantized_values);
+            output_int4[output_idx] = packed;
+        } else if (qparams.precision_bits == 2) {
+            uint packed = pack_int2_values(quantized_values);
+            output_int4[output_idx] = packed;
+        }
+    }
+}

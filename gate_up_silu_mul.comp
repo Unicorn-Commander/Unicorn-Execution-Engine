@@ -1,0 +1,143 @@
+#version 450
+
+// Enable FP16 extension for 2x speedup on RDNA3
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+// Fused FFN - Gate, Up, SiLU, Multiply Compute Shader
+// Computes: silu(gate_proj(x)) * up_proj(x)
+// Optimized for RDNA3 architecture with tiling and shared memory
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint hidden_size;       // H
+    uint intermediate_size; // I
+    uint flags;             // Bit 0: 0 for FP32, 1 for FP16
+} pc;
+
+// Conditional precision flag
+#define USE_FP16 ((pc.flags & 1u) != 0u)
+
+// FP32 Input buffers
+layout(std430, binding = 0) readonly buffer HiddenStates_FP32 {
+    float hidden_states_fp32[];
+};
+
+layout(std430, binding = 1) readonly buffer GateWeight_FP32 {
+    float gate_weight_fp32[];
+};
+
+layout(std430, binding = 2) readonly buffer UpWeight_FP32 {
+    float up_weight_fp32[];
+};
+
+layout(std430, binding = 3) writeonly buffer FusedIntermediate_FP32 {
+    float fused_intermediate_data_fp32[];
+};
+
+// FP16 Input buffers (same bindings, different views)
+layout(std430, binding = 0) readonly buffer HiddenStates_FP16 {
+    float16_t hidden_states_fp16[];
+};
+
+layout(std430, binding = 1) readonly buffer GateWeight_FP16 {
+    float16_t gate_weight_fp16[];
+};
+
+layout(std430, binding = 2) readonly buffer UpWeight_FP16 {
+    float16_t up_weight_fp16[];
+};
+
+layout(std430, binding = 3) writeonly buffer FusedIntermediate_FP16 {
+    float16_t fused_intermediate_data_fp16[];
+};
+
+// SiLU activation function (always FP32 for precision)
+float silu_fp32(float x) {
+    return x * (1.0 / (1.0 + exp(-x)));
+}
+
+// Tile size for shared memory operations
+const uint TILE_SIZE = 8; // Must match local_size_x and local_size_y
+
+shared float hs_tile[TILE_SIZE][TILE_SIZE];
+shared float gw_tile[TILE_SIZE][TILE_SIZE];
+shared float uw_tile[TILE_SIZE][TILE_SIZE];
+
+void main() {
+    uint global_row = gl_GlobalInvocationID.y; // Corresponds to batch_size (or sequence_length)
+    uint global_col = gl_GlobalInvocationID.x; // Corresponds to intermediate_size for output
+
+    uint local_row = gl_LocalInvocationID.y;
+    uint local_col = gl_LocalInvocationID.x;
+
+    if (global_row >= 1 || global_col >= pc.intermediate_size) { // Assuming batch_size 1 for now
+        return;
+    }
+
+    // Use FP32 accumulation for precision even in FP16 mode
+    float gate_proj_acc_fp32 = 0.0;
+    float up_proj_acc_fp32 = 0.0;
+
+    // Loop over hidden_size dimension for matrix multiplication
+    uint num_tiles_hidden = (pc.hidden_size + TILE_SIZE - 1) / TILE_SIZE;
+
+    for (uint tile_idx_hidden = 0; tile_idx_hidden < num_tiles_hidden; ++tile_idx_hidden) {
+        // Load tiles for hidden_states, gate_weight, and up_weight
+
+        // Load hidden_states tile (conditional on precision)
+        if ((tile_idx_hidden * TILE_SIZE + local_col) < pc.hidden_size) {
+            if (USE_FP16) {
+                hs_tile[local_row][local_col] = float(hidden_states_fp16[global_row * pc.hidden_size + (tile_idx_hidden * TILE_SIZE + local_col)]);
+            } else {
+                hs_tile[local_row][local_col] = hidden_states_fp32[global_row * pc.hidden_size + (tile_idx_hidden * TILE_SIZE + local_col)];
+            }
+        } else {
+            hs_tile[local_row][local_col] = 0.0;
+        }
+
+        // Load gate_weight tile (conditional on precision)
+        if ((tile_idx_hidden * TILE_SIZE + local_row) < pc.hidden_size && (tile_idx_hidden * TILE_SIZE + global_col) < pc.intermediate_size) {
+            if (USE_FP16) {
+                gw_tile[local_row][local_col] = float(gate_weight_fp16[(tile_idx_hidden * TILE_SIZE + local_row) * pc.intermediate_size + global_col]);
+            } else {
+                gw_tile[local_row][local_col] = gate_weight_fp32[(tile_idx_hidden * TILE_SIZE + local_row) * pc.intermediate_size + global_col];
+            }
+        } else {
+            gw_tile[local_row][local_col] = 0.0;
+        }
+
+        // Load up_weight tile (conditional on precision)
+        if ((tile_idx_hidden * TILE_SIZE + local_row) < pc.hidden_size && (tile_idx_hidden * TILE_SIZE + global_col) < pc.intermediate_size) {
+            if (USE_FP16) {
+                uw_tile[local_row][local_col] = float(up_weight_fp16[(tile_idx_hidden * TILE_SIZE + local_row) * pc.intermediate_size + global_col]);
+            } else {
+                uw_tile[local_row][local_col] = up_weight_fp32[(tile_idx_hidden * TILE_SIZE + local_row) * pc.intermediate_size + global_col];
+            }
+        } else {
+            uw_tile[local_row][local_col] = 0.0;
+        }
+
+        barrier(); // Synchronize after loading tiles
+
+        // Compute partial gate_proj and up_proj results for the current tile
+        for (uint k = 0; k < TILE_SIZE; ++k) {
+            gate_proj_acc_fp32 += hs_tile[local_row][k] * gw_tile[k][local_col];
+            up_proj_acc_fp32 += hs_tile[local_row][k] * uw_tile[k][local_col];
+        }
+
+        barrier(); // Synchronize after computing partial products
+    }
+
+    // Apply SiLU and element-wise multiplication (always FP32 for precision)
+    float fused_intermediate_val_fp32 = silu_fp32(gate_proj_acc_fp32) * up_proj_acc_fp32;
+    
+    // Store result (conditional on precision)
+    if (USE_FP16) {
+        fused_intermediate_data_fp16[global_row * pc.intermediate_size + global_col] = float16_t(fused_intermediate_val_fp32);
+    } else {
+        fused_intermediate_data_fp32[global_row * pc.intermediate_size + global_col] = fused_intermediate_val_fp32;
+    }
+}

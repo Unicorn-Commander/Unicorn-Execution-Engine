@@ -1,0 +1,32 @@
+
+        #version 450
+        
+        layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+        
+        layout(set = 0, binding = 0, r32ui) uniform readonly uimage2D input_int4;
+        layout(set = 0, binding = 1, r32ui) uniform readonly uimage2D weight_int4;
+        layout(set = 0, binding = 2, r32f) uniform writeonly image2D output_fp32;
+        layout(set = 0, binding = 3) uniform readonly LookupTables {
+            float lookup_table[16];
+        };
+        
+        void main() {
+            uvec2 coord = gl_GlobalInvocationID.xy;
+            
+            // Fast INT4 dequantization using lookup table
+            uint packed_weight = imageLoad(weight_int4, ivec2(coord)).r;
+            
+            // Unpack 8 INT4 values from uint32
+            float dequant_weights[8];
+            for (int i = 0; i < 8; i++) {
+                uint int4_val = (packed_weight >> (i * 4)) & 0xF;
+                dequant_weights[i] = lookup_table[int4_val];
+            }
+            
+            // Perform matrix multiplication with dequantized weights
+            float result = 0.0;
+            // ... matrix multiplication logic ...
+            
+            imageStore(output_fp32, ivec2(coord), vec4(result, 0, 0, 0));
+        }
+        

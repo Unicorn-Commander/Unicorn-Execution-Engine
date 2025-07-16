@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Gemma 3n E4B Quick Launcher
+# Simple wrapper for the full start script
+#
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/start_gemma3n_e4b.sh" "$@"

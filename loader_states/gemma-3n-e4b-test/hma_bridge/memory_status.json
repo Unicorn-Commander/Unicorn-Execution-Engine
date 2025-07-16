@@ -1,0 +1,46 @@
+{
+  "devices": {
+    "npu_phoenix": {
+      "total_size": 21474836480,
+      "allocated_size": 297271293,
+      "free_size": 21177565187,
+      "utilization": 0.013842773297801614,
+      "active_blocks": 64,
+      "regions": 1
+    },
+    "radeon_780m": {
+      "total_size": 34359738368,
+      "allocated_size": 0,
+      "free_size": 34359738368,
+      "utilization": 0.0,
+      "active_blocks": 0,
+      "regions": 1
+    },
+    "system_cpu": {
+      "total_size": 47244640256,
+      "allocated_size": 0,
+      "free_size": 47244640256,
+      "utilization": 0.0,
+      "active_blocks": 0,
+      "regions": 1
+    }
+  },
+  "allocation_stats": {
+    "total_allocated": 297271293,
+    "peak_allocation": 301989888,
+    "allocation_count": 64,
+    "deallocation_count": 0,
+    "active_regions": 64
+  },
+  "performance_metrics": {
+    "avg_allocation_time": 4.284083843231201e-06,
+    "avg_transfer_time": 0,
+    "avg_bandwidth_utilization": 0
+  },
+  "elastic_blocks": {
+    "total": 168,
+    "active": 59,
+    "compressed": 5,
+    "inactive": 104
+  }
+}

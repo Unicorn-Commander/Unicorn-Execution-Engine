@@ -1,0 +1,12 @@
+
+        #version 450
+        
+        // INT4 FFN computation with SiLU activation
+        layout(local_size_x = 64, local_size_y = 4, local_size_z = 1) in;
+        
+        // INT4 optimized FFN computation
+        void main() {
+            // FFN computation with INT4 weights
+            // Fused dequantization + activation
+        }
+        

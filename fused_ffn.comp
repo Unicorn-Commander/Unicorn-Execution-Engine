@@ -1,0 +1,168 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+
+// Fused FFN Compute Shader for Gemma 3 27B
+// Implements: down_proj(silu(gate_proj(x)) * up_proj(x))
+// Optimized for RDNA3 architecture
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Input buffers
+layout(std430, binding = 0) readonly buffer HiddenStates {
+    float hidden_states[];
+};
+
+layout(std430, binding = 1) readonly buffer GateWeight {
+    float gate_weight[];
+};
+
+layout(std430, binding = 2) readonly buffer UpWeight {
+    float up_weight[];
+};
+
+layout(std430, binding = 3) readonly buffer DownWeight {
+    float down_weight[];
+};
+
+// Output buffer
+layout(std430, binding = 4) writeonly buffer Output {
+    float output_data[];
+};
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint hidden_size;       // H
+    uint intermediate_size; // I
+    uint flags;             // Bit 0: 0 for FP32, 1 for FP16 (future use)
+} pc;
+
+// SiLU activation function
+float silu_fp32(float x) {
+    return x * (1.0 / (1.0 + exp(-x)));
+}
+
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+half silu_fp16(half x) {
+    return x * (1.0h / (1.0h + exp(-x)));
+}
+#endif
+
+// Tile size for shared memory operations
+const uint TILE_SIZE = 8; // Must match local_size_x and local_size_y
+
+shared float hs_tile[TILE_SIZE][TILE_SIZE];
+shared float gw_tile[TILE_SIZE][TILE_SIZE];
+shared float uw_tile[TILE_SIZE][TILE_SIZE];
+shared float dw_tile[TILE_SIZE][TILE_SIZE];
+
+void main() {
+    uint global_row = gl_GlobalInvocationID.y; // Corresponds to batch_size (or sequence_length)
+    uint global_col = gl_GlobalInvocationID.x; // Corresponds to hidden_size for output
+
+    uint local_row = gl_LocalInvocationID.y;
+    uint local_col = gl_LocalInvocationID.x;
+
+    if (global_row >= 1 || global_col >= pc.hidden_size) { // Assuming batch_size 1 for now
+        return;
+    }
+
+    bool use_fp16 = (pc.flags & 1) == 1;
+
+    float final_accumulator_fp32 = 0.0;
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+    half final_accumulator_fp16 = 0.0h;
+#endif
+
+    // Loop over intermediate_size dimension for down_proj
+    // This loop iterates over tiles of the intermediate dimension
+    uint num_tiles_intermediate = (pc.intermediate_size + TILE_SIZE - 1) / TILE_SIZE;
+
+    for (uint tile_idx_intermediate = 0; tile_idx_intermediate < num_tiles_intermediate; ++tile_idx_intermediate) {
+        // Load tiles for gate_proj and up_proj
+        // hs_tile: TILE_SIZE x TILE_SIZE (from hidden_states)
+        // gw_tile: TILE_SIZE x TILE_SIZE (from gate_weight)
+        // uw_tile: TILE_SIZE x TILE_SIZE (from up_weight)
+
+        // Load hidden_states tile (for gate_proj and up_proj)
+        if ((tile_idx_intermediate * TILE_SIZE + local_col) < pc.hidden_size) {
+            hs_tile[local_row][local_col] = hidden_states[global_row * pc.hidden_size + (tile_idx_intermediate * TILE_SIZE + local_col)];
+        } else {
+            hs_tile[local_row][local_col] = 0.0;
+        }
+
+        // Load gate_weight tile
+        if ((tile_idx_intermediate * TILE_SIZE + local_row) < pc.hidden_size && (tile_idx_intermediate * TILE_SIZE + local_col) < pc.intermediate_size) {
+            gw_tile[local_row][local_col] = gate_weight[(tile_idx_intermediate * TILE_SIZE + local_row) * pc.intermediate_size + (tile_idx_intermediate * TILE_SIZE + local_col)];
+        } else {
+            gw_tile[local_row][local_col] = 0.0;
+        }
+
+        // Load up_weight tile
+        if ((tile_idx_intermediate * TILE_SIZE + local_row) < pc.hidden_size && (tile_idx_intermediate * TILE_SIZE + local_col) < pc.intermediate_size) {
+            uw_tile[local_row][local_col] = up_weight[(tile_idx_intermediate * TILE_SIZE + local_row) * pc.intermediate_size + (tile_idx_intermediate * TILE_SIZE + local_col)];
+        } else {
+            uw_tile[local_row][local_col] = 0.0;
+        }
+
+        barrier(); // Synchronize after loading tiles
+
+        // Compute partial gate_proj and up_proj results for the current tile
+        float gate_proj_partial_fp32 = 0.0;
+        float up_proj_partial_fp32 = 0.0;
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+        half gate_proj_partial_fp16 = 0.0h;
+        half up_proj_partial_fp16 = 0.0h;
+#endif
+
+        for (uint k = 0; k < TILE_SIZE; ++k) {
+            if (use_fp16) {
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+                gate_proj_partial_fp16 += half(hs_tile[local_row][k]) * half(gw_tile[k][local_col]);
+                up_proj_partial_fp16 += half(hs_tile[local_row][k]) * half(uw_tile[k][local_col]);
+#endif
+            } else {
+                gate_proj_partial_fp32 += hs_tile[local_row][k] * gw_tile[k][local_col];
+                up_proj_partial_fp32 += hs_tile[local_row][k] * uw_tile[k][local_col];
+            }
+        }
+
+        barrier(); // Synchronize after computing partial products
+
+        // Apply SiLU and element-wise multiplication for the current tile
+        float fused_intermediate_val_fp32 = 0.0;
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+        half fused_intermediate_val_fp16 = 0.0h;
+#endif
+
+        if (use_fp16) {
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+            fused_intermediate_val_fp16 = silu_fp16(gate_proj_partial_fp16) * up_proj_partial_fp16;
+#endif
+        } else {
+            fused_intermediate_val_fp32 = silu_fp32(gate_proj_partial_fp32) * up_proj_partial_fp32;
+        }
+
+        // Accumulate for down_proj
+        // This part needs to be re-thought for tiling. Each thread computes one output element.
+        // The fused_intermediate_val is for a specific intermediate column within the tile.
+        // We need to accumulate across the intermediate dimension.
+
+        // For now, a simplified accumulation for correctness, not full tiling for down_proj
+        if (use_fp16) {
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+            final_accumulator_fp16 += fused_intermediate_val_fp16 * half(down_weight[(tile_idx_intermediate * TILE_SIZE + local_col) * pc.hidden_size + global_col]);
+#endif
+        } else {
+            final_accumulator_fp32 += fused_intermediate_val_fp32 * down_weight[(tile_idx_intermediate * TILE_SIZE + local_col) * pc.hidden_size + global_col];
+        }
+    }
+
+    // Store final result
+    if (use_fp16) {
+#ifdef GL_EXT_shader_explicit_arithmetic_types_float16
+        output_data[global_row * pc.hidden_size + global_col] = float(final_accumulator_fp16);
+#endif
+    } else {
+        output_data[global_row * pc.hidden_size + global_col] = final_accumulator_fp32;
+    }
+}

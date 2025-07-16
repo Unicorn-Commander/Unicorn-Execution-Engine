@@ -1,0 +1,112 @@
+#version 450
+
+// Enable FP16 extension for 2x speedup on RDNA3
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+// Fused FFN - Down Projection Compute Shader
+// Computes: fused_intermediate * down_weight
+// Optimized for RDNA3 architecture
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint hidden_size;       // H
+    uint intermediate_size; // I
+    uint flags;             // Bit 0: 0 for FP32, 1 for FP16
+} pc;
+
+// Conditional precision flag
+#define USE_FP16 ((pc.flags & 1u) != 0u)
+
+// FP32 Input buffers
+layout(std430, binding = 0) readonly buffer FusedIntermediate_FP32 {
+    float fused_intermediate_data_fp32[];
+};
+
+layout(std430, binding = 1) readonly buffer DownWeight_FP32 {
+    float down_weight_fp32[];
+};
+
+layout(std430, binding = 2) writeonly buffer Output_FP32 {
+    float output_data_fp32[];
+};
+
+// FP16 Input buffers (same bindings, different views)
+layout(std430, binding = 0) readonly buffer FusedIntermediate_FP16 {
+    float16_t fused_intermediate_data_fp16[];
+};
+
+layout(std430, binding = 1) readonly buffer DownWeight_FP16 {
+    float16_t down_weight_fp16[];
+};
+
+layout(std430, binding = 2) writeonly buffer Output_FP16 {
+    float16_t output_data_fp16[];
+};
+
+// Tile size for shared memory operations
+const uint TILE_SIZE = 8; // Must match local_size_x and local_size_y
+
+shared float fi_tile[TILE_SIZE][TILE_SIZE];
+shared float dw_tile[TILE_SIZE][TILE_SIZE];
+
+void main() {
+    uint global_row = gl_GlobalInvocationID.y; // Corresponds to batch_size (or sequence_length)
+    uint global_col = gl_GlobalInvocationID.x; // Corresponds to hidden_size for output
+
+    uint local_row = gl_LocalInvocationID.y;
+    uint local_col = gl_LocalInvocationID.x;
+
+    if (global_row >= 1 || global_col >= pc.hidden_size) { // Assuming batch_size 1 for now
+        return;
+    }
+
+    float final_accumulator_fp32 = 0.0;
+
+    // Loop over intermediate_size dimension for matrix multiplication
+    uint num_tiles_intermediate = (pc.intermediate_size + TILE_SIZE - 1) / TILE_SIZE;
+
+    for (uint tile_idx_intermediate = 0; tile_idx_intermediate < num_tiles_intermediate; ++tile_idx_intermediate) {
+        // Load tiles for fused_intermediate and down_weight
+
+        // Load fused_intermediate tile (conditional on precision)
+        if ((tile_idx_intermediate * TILE_SIZE + local_col) < pc.intermediate_size) {
+            if (USE_FP16) {
+                fi_tile[local_row][local_col] = float(fused_intermediate_data_fp16[global_row * pc.intermediate_size + (tile_idx_intermediate * TILE_SIZE + local_col)]);
+            } else {
+                fi_tile[local_row][local_col] = fused_intermediate_data_fp32[global_row * pc.intermediate_size + (tile_idx_intermediate * TILE_SIZE + local_col)];
+            }
+        } else {
+            fi_tile[local_row][local_col] = 0.0;
+        }
+
+        // Load down_weight tile (conditional on precision)
+        if ((tile_idx_intermediate * TILE_SIZE + local_row) < pc.intermediate_size && (tile_idx_intermediate * TILE_SIZE + global_col) < pc.hidden_size) {
+            if (USE_FP16) {
+                dw_tile[local_row][local_col] = float(down_weight_fp16[(tile_idx_intermediate * TILE_SIZE + local_row) * pc.hidden_size + global_col]);
+            } else {
+                dw_tile[local_row][local_col] = down_weight_fp32[(tile_idx_intermediate * TILE_SIZE + local_row) * pc.hidden_size + global_col];
+            }
+        } else {
+            dw_tile[local_row][local_col] = 0.0;
+        }
+
+        barrier(); // Synchronize after loading tiles
+
+        // Compute partial down_proj result for the current tile
+        for (uint k = 0; k < TILE_SIZE; ++k) {
+            final_accumulator_fp32 += fi_tile[local_row][k] * dw_tile[k][local_col];
+        }
+
+        barrier(); // Synchronize after computing partial products
+    }
+
+    // Store final result (conditional on precision)
+    if (USE_FP16) {
+        output_data_fp16[global_row * pc.hidden_size + global_col] = float16_t(final_accumulator_fp32);
+    } else {
+        output_data_fp32[global_row * pc.hidden_size + global_col] = final_accumulator_fp32;
+    }
+}

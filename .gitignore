@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+gemma3n_env/
+venv/
+env/
+ENV/
+
+# Large model files
+quantized_models/
+real_test_weights/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+*.h5
+*.pb
+
+# MLIR/AIE build artifacts
+mlir-aie2-src/
+*.xclbin
+*.spv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Large archives
+*.tar.gz
+*.zip
+*.tar
+*.gz
+
+# Hardware specific
+npu_kernels/*.bin
+vulkan_shaders/*.spv
+
+# Claude AI
+.claude/
