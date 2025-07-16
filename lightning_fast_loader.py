@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class LightningFastLoader:
     """Ollama-speed model loading with memory mapping and minimal processing"""
     
-    def __init__(self, quantized_model_path: str = "./quantized_models/gemma-3-27b-it-layer-by-layer"):
+    def __init__(self, quantized_model_path: str = "/home/ucadmin/Development/Unicorn-Execution-Engine/quantized_models/gemma-3-27b-it-layer-by-layer"):
         self.quantized_path = Path(quantized_model_path)
         self.device_assignments = {}
         
@@ -57,7 +57,10 @@ class LightningFastLoader:
                 for tensor_name in tensor_names:
                     try:
                         # Load tensor directly (keep quantized!)
+                        tensor_load_start = time.time()
                         tensor = f.get_tensor(tensor_name)
+                        tensor_load_time = time.time() - tensor_load_start
+                        logger.info(f"      Tensor {tensor_name} loaded in {tensor_load_time:.2f}s")
                         
                         # Load scale for dequantization
                         scale_name = f"{tensor_name}_scale"
@@ -182,7 +185,7 @@ class LightningFastLoader:
         total_size_gb = 0
         
         # Process ALL files in parallel with maximum workers
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
             future_to_file = {
                 executor.submit(self._memory_map_file, file_path): file_path 
                 for file_path in all_files
@@ -329,7 +332,7 @@ def test_lightning_loader():
     logger.info(f"   Speed: {model_info['hardware_status']['loading_speed_gbps']:.1f} GB/s")
     logger.info(f"   CPU cores: {model_info['hardware_status']['cpu_cores_used']}")
     logger.info(f"   Model size: {model_info['hardware_status']['model_size_gb']:.1f}GB")
-    logger.info(f"   Quantized: {model_info['hardware_status']['quantized_weights']}")
+    logger.info(f"   Quantized: {model_info['hardware_status']['quantized_tensors']}")
     
     # Test instant layer access (no dequantization)
     layer_0 = model_info['layer_loader'](0)

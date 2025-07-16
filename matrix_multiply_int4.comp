@@ -1,0 +1,41 @@
+#version 450
+#extension GL_KHR_shader_subgroup_wave32 : enable
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) buffer readonly InputA { float A[]; };
+layout(binding = 1) buffer readonly InputB { uint B[]; };
+layout(binding = 2) buffer writeonly OutputC { float C[]; };
+
+layout(push_constant) uniform PushConstants {
+    float scale;
+    int zero_point;
+    uint M;
+    uint N;
+    uint K;
+};
+
+void main() {
+    uint row = gl_GlobalInvocationID.x;
+    uint col = gl_GlobalInvocationID.y;
+
+    if (row >= M || col >= N) {
+        return;
+    }
+
+    float sum = 0.0;
+    for (uint k = 0; k < K; ++k) {
+        uint b_packed_index = (k * N + col) / 2;
+        uint b_packed_value = B[b_packed_index];
+        
+        float b_val;
+        if ((k * N + col) % 2 == 0) {
+            b_val = float(b_packed_value & 0xF);
+        } else {
+            b_val = float((b_packed_value >> 4) & 0xF);
+        }
+
+        sum += A[row * K + k] * ((b_val - float(zero_point)) * scale);
+    }
+
+    C[row * N + col] = sum;
+}

@@ -204,7 +204,7 @@ class NPUAttentionKernelReal:
             
             if not kernel_path:
                 # Try to find best kernel
-                kernel_dir = "/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/npu_kernels"
+                kernel_dir = "/home/ucadmin/Development/Unicorn-Execution-Engine/npu_kernels"
                 
                 # Look for exact match first
                 kernel_path = f"{kernel_dir}/attention_{self.seq_length}_int8.bin"
