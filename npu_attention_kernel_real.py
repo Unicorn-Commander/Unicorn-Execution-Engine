@@ -8,30 +8,35 @@ import numpy as np
 import logging
 import ctypes
 import os
+import time
 from typing import Dict, Tuple, List, Optional, Any
+
+# Import XRT for NPU interaction
+import sys
+sys.path.append('/opt/xilinx/xrt/python')
+import pyxrt as xrt
 
 logger = logging.getLogger(__name__)
 
 class NPUAttentionKernelReal:
     """Real NPU Attention Kernel with direct hardware acceleration"""
 
-    def __init__(self, seq_length=256, d_model=5376, num_heads=32):
+    def __init__(self, seq_length=256, d_model=2560, num_heads=20):
         self.seq_length = seq_length
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.head_dim = d_model // num_heads
+        self.d_model = d_model  # Corrected to 2560 for Gemma3 4B
+        self.num_heads = num_heads  # Corrected to 20 for Gemma3 4B  
+        self.head_dim = d_model // num_heads  # Should be 128
         self.initialized = False
         
-        # NPU hardware handles
-        self.npu_device = None
-        self.npu_context = None
-        self.xdna_driver = None
-        
-        # Kernel data
-        self.kernel_binary = None
-        self.kernel_config = None
-        self.kernel_loaded = False
-        
+        self.device = None
+        self.kernel = None
+        self.bo_hidden_states = None
+        self.bo_q_weight = None
+        self.bo_k_weight = None
+        self.bo_v_weight = None
+        self.bo_o_weight = None
+        self.bo_output = None
+
         logger.info("🧠 Real NPU Attention Kernel Initialized.")
         logger.info(f"   - Sequence Length: {seq_length}")
         logger.info(f"   - Model Dimension: {d_model}")
@@ -43,26 +48,20 @@ class NPUAttentionKernelReal:
         logger.info("⚡ Initializing Real NPU Hardware...")
         
         try:
-            # Check for NPU device
-            if not self._detect_npu_device():
-                logger.error("❌ AMD Phoenix NPU not detected")
-                return False
-                
-            # Load NPU driver
-            if not self._load_npu_driver():
-                logger.error("❌ Failed to load NPU driver")
-                return False
-                
-            # Initialize NPU context
-            if not self._initialize_npu_context():
-                logger.error("❌ Failed to initialize NPU context")
-                return False
-                
-            # Load attention kernel
-            if not self._load_attention_kernel():
-                logger.error("❌ Failed to load attention kernel")
-                return False
-                
+            # Try versioned library first, then fallback
+            try:
+                ctypes.CDLL("/opt/xilinx/xrt/lib/libxrt_core.so.2")
+            except:
+                ctypes.CDLL("/opt/xilinx/xrt/lib/libxrt_core.so")
+            self.device = xrt.device(0)
+            # Load the xclbin file
+            xclbin_path = "/home/ucadmin/Development/Unicorn-Execution-Engine/npu_kernels_real/attention_256_real.xclbin"
+            self.xclbin = xrt.xclbin(xclbin_path)
+            self.device.register_xclbin(self.xclbin)
+            
+            # Get kernel from xclbin
+            kernel_name = "gemma3_attention_kernel"  # Enhanced kernel name
+            self.kernel = xrt.kernel(self.device, self.xclbin.get_uuid(), kernel_name)
             self.initialized = True
             logger.info("✅ Real NPU Hardware initialized successfully")
             return True
@@ -71,176 +70,9 @@ class NPUAttentionKernelReal:
             logger.error(f"❌ NPU initialization failed: {e}")
             return False
 
-    def _detect_npu_device(self) -> bool:
-        """Detect AMD Phoenix NPU device"""
-        try:
-            # Check for NPU accelerator device
-            npu_devices = []
-            
-            # Method 1: Check /dev/accel devices
-            accel_devices = "/dev/accel"
-            if os.path.exists(accel_devices):
-                for device in os.listdir(accel_devices):
-                    accel_path = f"{accel_devices}/{device}"
-                    if os.path.exists(accel_path):
-                        npu_devices.append(accel_path)
-                        logger.info(f"✅ Found NPU accelerator device: {accel_path}")
-            
-            # Method 2: Check /sys/class/accel devices
-            sys_accel = "/sys/class/accel"
-            if os.path.exists(sys_accel):
-                for device in os.listdir(sys_accel):
-                    device_path = f"{sys_accel}/{device}/device/vendor"
-                    if os.path.exists(device_path):
-                        with open(device_path, 'r') as f:
-                            vendor = f.read().strip()
-                        if vendor == "0x1022":  # AMD vendor ID
-                            # Check device ID for Phoenix NPU
-                            device_id_path = f"{sys_accel}/{device}/device/device"
-                            if os.path.exists(device_id_path):
-                                with open(device_id_path, 'r') as f:
-                                    device_id = f.read().strip()
-                                if device_id == "0x1502":  # Phoenix NPU device ID
-                                    logger.info(f"✅ Found AMD Phoenix NPU: {device} (vendor: {vendor}, device: {device_id})")
-                                    npu_devices.append(device)
-            
-            if not npu_devices:
-                logger.warning("⚠️ No AMD Phoenix NPU devices found")
-                return False
-                
-            logger.info(f"✅ AMD Phoenix NPU detection successful: {len(npu_devices)} devices")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ NPU detection failed: {e}")
-            return False
-
-    def _load_npu_driver(self) -> bool:
-        """Load NPU driver library"""
-        try:
-            # Try to load the XDNA driver
-            driver_paths = [
-                "/usr/local/xrt/lib/libxrt_driver_xdna.so",
-                "/usr/lib/x86_64-linux-gnu/libxrt_driver_xdna.so",
-                "/opt/xilinx/xrt/lib/libxrt_driver_xdna.so"
-            ]
-            
-            for path in driver_paths:
-                if os.path.exists(path):
-                    try:
-                        self.xdna_driver = ctypes.CDLL(path)
-                        logger.info(f"✅ Loaded NPU driver: {path}")
-                        return True
-                    except Exception as e:
-                        logger.warning(f"⚠️ Failed to load {path}: {e}")
-                        continue
-            
-            logger.error("❌ No NPU driver found")
-            return False
-            
-        except Exception as e:
-            logger.error(f"❌ NPU driver loading failed: {e}")
-            return False
-
-    def _initialize_npu_context(self) -> bool:
-        """Initialize NPU execution context"""
-        try:
-            # Check NPU availability through multiple methods
-            npu_interfaces = []
-            
-            # Method 1: Check /dev/accel device
-            if os.path.exists("/dev/accel/accel0"):
-                npu_interfaces.append("/dev/accel/accel0")
-                logger.info("✅ NPU device interface: /dev/accel/accel0")
-            
-            # Method 2: Check AMDXDNA driver module
-            if os.path.exists("/sys/module/amdxdna"):
-                npu_interfaces.append("/sys/module/amdxdna")
-                logger.info("✅ AMDXDNA driver module loaded")
-            
-            # Method 3: Check NPU PCI device
-            npu_pci_path = "/sys/devices/pci0000:00/0000:00:08.2/0000:c7:00.1"
-            if os.path.exists(npu_pci_path):
-                npu_interfaces.append(npu_pci_path)
-                logger.info(f"✅ NPU PCI device interface: {npu_pci_path}")
-            
-            # Method 4: Check for XRT runtime interfaces
-            xrt_paths = [
-                "/sys/kernel/tracing/events/amdxdna_trace",
-                "/sys/bus/pci/drivers/amdxdna"
-            ]
-            
-            for path in xrt_paths:
-                if os.path.exists(path):
-                    npu_interfaces.append(path)
-                    logger.info(f"✅ XRT NPU interface: {path}")
-            
-            if not npu_interfaces:
-                logger.error("❌ No NPU interfaces available")
-                return False
-            
-            # Initialize context using the available interfaces
-            self.npu_device = "/dev/accel/accel0"  # Primary NPU device
-            self.npu_context = {
-                "device": self.npu_device,
-                "interfaces": npu_interfaces,
-                "driver": "amdxdna",
-                "initialized": True
-            }
-            logger.info(f"✅ NPU context initialized with {len(npu_interfaces)} interfaces")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ NPU context initialization failed: {e}")
-            return False
-
-    def _load_attention_kernel(self) -> bool:
-        """Load attention computation kernel"""
-        try:
-            logger.info("⚡ Loading Flash Attention kernel for NPU...")
-            
-            # Check environment for kernel path
-            kernel_path = os.environ.get('NPU_KERNEL_PATH')
-            
-            if not kernel_path:
-                # Try to find best kernel
-                kernel_dir = "/home/ucadmin/Development/Unicorn-Execution-Engine/npu_kernels"
-                
-                # Look for exact match first
-                kernel_path = f"{kernel_dir}/attention_{self.seq_length}_int8.bin"
-                
-                if not os.path.exists(kernel_path):
-                    # Try flash attention
-                    kernel_path = f"{kernel_dir}/gemma-3n-e4b-attention/flash_attention_kernel.bin"
-                    
-            if os.path.exists(kernel_path):
-                # Load the kernel binary
-                with open(kernel_path, 'rb') as f:
-                    self.kernel_binary = f.read()
-                    
-                self.kernel_loaded = True
-                logger.info(f"✅ Loaded NPU kernel: {os.path.basename(kernel_path)} ({len(self.kernel_binary)} bytes)")
-                
-                # Load config if available
-                import json
-                config_path = os.path.dirname(kernel_path) + "/kernel_configs.json"
-                if os.path.exists(config_path):
-                    with open(config_path, 'r') as f:
-                        self.kernel_config = json.load(f)
-                        logger.info("✅ Loaded kernel configuration")
-                
-                return True
-            else:
-                logger.error(f"❌ NPU kernel not found at {kernel_path}")
-                return False
-            
-        except Exception as e:
-            logger.error(f"❌ Attention kernel loading failed: {e}")
-            return False
-
     def compute_flash_attention(self, hidden_states: np.ndarray, q_proj_weight: np.ndarray, 
                                k_proj_weight: np.ndarray, v_proj_weight: np.ndarray, 
-                               o_proj_weight: np.ndarray, kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                               o_proj_weight: np.ndarray, kv_cache: Optional[Tuple[np.ndarray, np.ndarray]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """
         Compute Flash Attention on real NPU hardware
         """
@@ -248,39 +80,40 @@ class NPUAttentionKernelReal:
             raise RuntimeError("Real NPU Kernel not initialized")
 
         logger.info(f"🔥 Computing Flash Attention on REAL NPU Hardware: {hidden_states.shape}")
-        
-        # This is where real NPU execution would happen
-        # Since we don't have the full NPU kernel compiled, we must fail gracefully
-        
-        # Check if we can actually execute on NPU
-        if not self._can_execute_on_npu():
-            raise RuntimeError("NPU execution not available - no compiled kernel")
-            
-        # Real NPU execution would go here
-        # For now, we must fail since we don't have real implementation
-        raise NotImplementedError("Real NPU kernel execution not yet implemented. Need compiled MLIR-AIE2 kernel.")
+        start_time = time.time()
 
-    def _can_execute_on_npu(self) -> bool:
-        """Check if we can actually execute on NPU"""
-        # Real check would verify:
-        # - NPU device is available
-        # - Kernel is compiled and loaded
-        # - Memory is allocated
-        # - Context is ready
-        
-        if not self.initialized:
-            return False
-            
-        if not self.kernel_loaded or not self.kernel_binary:
-            return False
-            
-        # Check if NPU device and context are ready
-        if not self.npu_device or not self.npu_context:
-            return False
-            
-        # For now, we have the kernel binary but need XRT runtime
-        # to actually execute it. This requires the full XRT API.
-        return self.kernel_loaded
+        # Allocate buffers on the NPU
+        self.bo_hidden_states = xrt.bo(self.device, hidden_states.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(0))
+        self.bo_q_weight = xrt.bo(self.device, q_proj_weight.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(1))
+        self.bo_k_weight = xrt.bo(self.device, k_proj_weight.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(2))
+        self.bo_v_weight = xrt.bo(self.device, v_proj_weight.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(3))
+        self.bo_o_weight = xrt.bo(self.device, o_proj_weight.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(4))
+        self.bo_output = xrt.bo(self.device, hidden_states.nbytes, xrt.bo.flags.cacheable, self.kernel.group_id(5))
+
+        # Write data to the NPU buffers
+        self.bo_hidden_states.write(hidden_states, 0)
+        self.bo_q_weight.write(q_proj_weight, 0)
+        self.bo_k_weight.write(k_proj_weight, 0)
+        self.bo_v_weight.write(v_proj_weight, 0)
+        self.bo_o_weight.write(o_proj_weight, 0)
+
+        # Synchronize the buffers
+        self.bo_hidden_states.sync(xrt.bo.direction.device)
+        self.bo_q_weight.sync(xrt.bo.direction.device)
+        self.bo_k_weight.sync(xrt.bo.direction.device)
+        self.bo_v_weight.sync(xrt.bo.direction.device)
+        self.bo_o_weight.sync(xrt.bo.direction.device)
+
+        # Execute the kernel
+        run = self.kernel(self.bo_hidden_states, self.bo_q_weight, self.bo_k_weight, self.bo_v_weight, self.bo_o_weight, self.bo_output)
+        run.wait()
+
+        # Read the output back from the NPU
+        output = self.bo_output.read(hidden_states.nbytes, 0).view(np.float32).reshape(hidden_states.shape)
+
+        npu_time = time.time() - start_time
+        logger.info(f"✅ Flash Attention computation complete: {output.shape}")
+        return output, None, None, npu_time
 
     def cleanup(self):
         """Clean up NPU resources"""

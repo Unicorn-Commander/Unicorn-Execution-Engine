@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine"
+PROJECT_DIR="/home/ucadmin/Development/Unicorn-Execution-Engine"
 AI_ENV_SCRIPT="/home/ucadmin/activate-uc1-ai-py311.sh"
 MODEL_PATH="./models/gemma-3n-e4b-it"
 DEFAULT_PORT=8000

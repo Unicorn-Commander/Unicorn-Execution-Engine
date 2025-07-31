@@ -83,7 +83,7 @@ void main() {
         }
 
         // Load down_weight tile (conditional on precision)
-        if ((tile_idx_intermediate * TILE_SIZE + local_row) < pc.intermediate_size && (tile_idx_intermediate * TILE_SIZE + global_col) < pc.hidden_size) {
+        if ((tile_idx_intermediate * TILE_SIZE + local_row) < pc.intermediate_size && global_col < pc.hidden_size) {
             if (USE_FP16) {
                 dw_tile[local_row][local_col] = float(down_weight_fp16[(tile_idx_intermediate * TILE_SIZE + local_row) * pc.hidden_size + global_col]);
             } else {
