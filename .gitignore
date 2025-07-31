@@ -60,4 +60,4 @@ npu_kernels/*.bin
 vulkan_shaders/*.spv
 
 # Claude AI
-.claude/
+.claude/llama.cpp/
