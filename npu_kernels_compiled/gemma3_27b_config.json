@@ -1,0 +1,10 @@
+{
+    "model": "gemma-3-27b", 
+    "hidden_size": 4608,
+    "num_layers": 46,
+    "num_heads": 32,
+    "num_kv_heads": 16,
+    "head_dim": 144,
+    "vocab_size": 262144,
+    "kernel_file": "gemma3_27b_attention.xclbin"
+}

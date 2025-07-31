@@ -61,3 +61,4 @@ vulkan_shaders/*.spv
 
 # Claude AI
 .claude/llama.cpp/
+*.gguf

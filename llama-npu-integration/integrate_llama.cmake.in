@@ -1,0 +1,39 @@
+# Integration helper for adding NPU support to llama.cpp
+# This file is configured by CMake
+
+# Add NPU backend to llama.cpp build
+set(GGML_NPU_DIR "@CMAKE_CURRENT_SOURCE_DIR@")
+set(GGML_NPU_BUILD_DIR "@CMAKE_CURRENT_BINARY_DIR@")
+
+# Include NPU backend sources
+list(APPEND GGML_SOURCES_EXTRA
+    ${GGML_NPU_DIR}/ggml_npu_backend.cpp
+    ${GGML_NPU_DIR}/npu_backend.cpp
+    ${GGML_NPU_DIR}/npu_vulkan_bridge.cpp
+)
+
+# Add include directories
+list(APPEND GGML_INCLUDE_DIRS
+    ${GGML_NPU_DIR}
+)
+
+# Add compile definitions
+add_compile_definitions(GGML_USE_NPU)
+
+# Link NPU backend library
+list(APPEND GGML_LIBS_EXTRA
+    ggml-npu
+)
+
+# Add NPU backend option to GGML
+option(GGML_NPU "Enable NPU backend" ON)
+
+if(GGML_NPU)
+    message(STATUS "NPU backend enabled for llama.cpp")
+    
+    # Register NPU backend with GGML
+    add_compile_definitions(GGML_BACKEND_NPU)
+    
+    # Add NPU backend to available backends
+    set(GGML_BACKENDS "${GGML_BACKENDS} NPU")
+endif()

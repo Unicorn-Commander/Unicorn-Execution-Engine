@@ -1,0 +1,76 @@
+{
+  "header": {
+    "magic": "xclbin2",
+    "version": "2.14.0",
+    "platform": {
+      "vendor": "AMD",
+      "device": "Phoenix_NPU_XDNA1",
+      "architecture": "AIE2",
+      "topology": "4x5",
+      "frequency_mhz": 1000
+    }
+  },
+  "kernel_code": "\n        // Phoenix NPU Attention Kernel\n        // Architecture: XDNA1 4x5 (20 tiles)\n        // Precision: INT8\n        // Model: Gemma 3 4B\n        \n        #define NUM_HEADS 20\n        #define HEAD_DIM 128\n        #define HEADS_PER_TILE 1\n        #define SEQ_LEN 256\n        \n        // Quantization parameters\n        struct QuantParams {\n            int8_t scale;\n            int8_t zero_point;\n        };\n        \n        // Tile computation function\n        void compute_attention_tile(\n            int8_t* q_local,      // Query for this tile's heads\n            int8_t* k_local,      // Key for this tile's heads  \n            int8_t* v_local,      // Value for this tile's heads\n            int8_t* out_local,    // Output for this tile's heads\n            int tile_id,\n            QuantParams q_params,\n            QuantParams k_params,\n            QuantParams v_params\n        ) {\n            // Each tile processes HEADS_PER_TILE attention heads\n            const int start_head = tile_id * HEADS_PER_TILE;\n            const int end_head = min(start_head + HEADS_PER_TILE, NUM_HEADS);\n            \n            for (int head = start_head; head < end_head; head++) {\n                // Compute QK^T with INT8 operations\n                // Using vector intrinsics for 512-bit SIMD\n                \n                // Scale attention scores\n                // Apply softmax (approximated for INT8)\n                // Compute attention * V\n                \n                // Output uses INT8 quantization\n            }\n        }\n        \n        // Main kernel entry point\n        kernel void attention_compute(\n            global int8_t* qkv_buffer,\n            global int8_t* output_buffer,\n            global QuantParams* quant_params,\n            int batch_size,\n            int seq_len\n        ) {\n            // Get tile ID (0-19 for 4x5 topology)\n            int tile_row = get_group_id(0);\n            int tile_col = get_group_id(1);\n            int tile_id = tile_row * 5 + tile_col;\n            \n            if (tile_id >= 20) return;\n            \n            // Load data for this tile's heads\n            // Process attention\n            // Store results\n        }\n        ",
+  "metadata": {
+    "kernels": [
+      {
+        "name": "attention_compute",
+        "type": "aie",
+        "instances": 20,
+        "arguments": [
+          {
+            "name": "qkv_buffer",
+            "type": "global",
+            "size": "dynamic"
+          },
+          {
+            "name": "output_buffer",
+            "type": "global",
+            "size": "dynamic"
+          },
+          {
+            "name": "quant_params",
+            "type": "global",
+            "size": 24
+          },
+          {
+            "name": "batch_size",
+            "type": "scalar",
+            "size": 4
+          },
+          {
+            "name": "seq_len",
+            "type": "scalar",
+            "size": 4
+          }
+        ]
+      }
+    ],
+    "compute": {
+      "total_ops_per_run": 2621440,
+      "precision": "INT8",
+      "theoretical_tops": 16.0
+    }
+  },
+  "memory_layout": {
+    "banks": [
+      {
+        "id": 0,
+        "type": "DDR",
+        "size": "2GB",
+        "usage": "global"
+      },
+      {
+        "id": 1,
+        "type": "SRAM",
+        "size": "1.25MB",
+        "usage": "local"
+      }
+    ]
+  },
+  "topology": {
+    "type": "4x5",
+    "tiles": 20,
+    "interconnect": "2D_mesh"
+  }
+}
