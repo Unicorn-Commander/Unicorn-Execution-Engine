@@ -1,0 +1,51 @@
+{
+  "gemma3n": {
+    "npu": [
+      {
+        "prompt": "Hello, how are you today?",
+        "tokens": 99.0,
+        "time_ms": 183.67,
+        "tokens_per_second": 539.0101813034246,
+        "total_time": 10.483472108840942
+      },
+      {
+        "prompt": "Explain quantum computing in simple terms.",
+        "tokens": 99.0,
+        "time_ms": 175.17,
+        "tokens_per_second": 565.1652680253468,
+        "total_time": 10.492598295211792
+      },
+      {
+        "prompt": "Write a short story about a robot learning to paint.",
+        "tokens": 99.0,
+        "time_ms": 209.93,
+        "tokens_per_second": 471.5857666841328,
+        "total_time": 10.53896713256836
+      }
+    ],
+    "cpu": [
+      {
+        "prompt": "Hello, how are you today?",
+        "tokens": 74.0,
+        "time_ms": 192.88,
+        "tokens_per_second": 383.6582330982995,
+        "total_time": 8.251871585845947
+      },
+      {
+        "prompt": "Explain quantum computing in simple terms.",
+        "tokens": 99.0,
+        "time_ms": 182.92,
+        "tokens_per_second": 541.2202055543407,
+        "total_time": 10.791579008102417
+      },
+      {
+        "prompt": "Write a short story about a robot learning to paint.",
+        "tokens": 99.0,
+        "time_ms": 237.19,
+        "tokens_per_second": 417.3869050128589,
+        "total_time": 10.814918041229248
+      }
+    ],
+    "model_file": "gemma-3n-E4B-it-Q8_0.gguf"
+  }
+}
