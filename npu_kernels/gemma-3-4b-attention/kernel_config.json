@@ -1,0 +1,22 @@
+{
+  "model_name": "gemma-3-4b",
+  "npu_config": {
+    "device_name": "NPU Phoenix",
+    "tops_performance": 17179869184,
+    "memory_size": 2147483648,
+    "cores": 8,
+    "precision_support": [
+      "INT8",
+      "INT4",
+      "FP16"
+    ]
+  },
+  "attention_config": {
+    "hidden_size": 2560,
+    "num_heads": 32,
+    "num_key_value_heads": 16,
+    "head_dim": 80,
+    "max_seq_len": 8192,
+    "precision": "INT8"
+  }
+}

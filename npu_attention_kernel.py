@@ -45,7 +45,14 @@ class NPUAttentionKernel:
     Implements efficient attention computation on AMD NPU Phoenix
     """
     
-    def __init__(self, config: NPUAttentionConfig):
+    def __init__(self, config: NPUAttentionConfig = None, seq_length=None, d_model=None, num_heads=None): # Added optional args for compatibility
+        if config is None:
+            # If no config is provided, create one using the provided args
+            config = NPUAttentionConfig(
+                seq_length=seq_length if seq_length is not None else 512,
+                d_model=d_model if d_model is not None else 2048,
+                num_heads=num_heads if num_heads is not None else 8
+            )
         self.config = config
         self.npu_device = None
         self.kernel_binary = None

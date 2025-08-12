@@ -19,6 +19,7 @@ import time
 import gc
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from multiprocessing import cpu_count
+from real_vulkan_matrix_compute import VulkanMatrixCompute
 
 # MAXIMUM CPU utilization
 os.environ['OMP_NUM_THREADS'] = str(cpu_count())
@@ -32,10 +33,31 @@ logger = logging.getLogger(__name__)
 
 class LightningFastLoader:
     """Ollama-speed model loading with memory mapping and minimal processing"""
+    _vulkan_compute_instance = None # Class-level Vulkan compute instance
     
-    def __init__(self, quantized_model_path: str = "./quantized_models/gemma-3-27b-it-layer-by-layer"):
+    def __init__(self, quantized_model_path: str = "/home/ucadmin/Development/Unicorn-Execution-Engine/quantized_models/gemma-3-27b-it-layer-by-layer", vulkan_compute_instance=None):
         self.quantized_path = Path(quantized_model_path)
         self.device_assignments = {}
+        
+        if vulkan_compute_instance is not None:
+            self.vulkan_compute = vulkan_compute_instance
+        else:
+            if LightningFastLoader._vulkan_compute_instance is None:
+                from vulkan_int8_support import add_int8_support
+                from vulkan_int4_support import add_int4_support
+                from real_vulkan_matrix_compute import VulkanMatrixCompute
+                add_int8_support(VulkanMatrixCompute)
+                add_int4_support(VulkanMatrixCompute)
+                LightningFastLoader._vulkan_compute_instance = VulkanMatrixCompute()
+                LightningFastLoader._vulkan_compute_instance.initialize()
+            self.vulkan_compute = LightningFastLoader._vulkan_compute_instance
+        
+        logger.info(f"⚡ Lightning Fast Loader (Ollama-style)")
+        logger.info(f"🚀 Using ALL {cpu_count()} CPU cores")
+        logger.info(f"💾 96GB shared memory pool available")
+        self.quantized_path = Path(quantized_model_path)
+        self.device_assignments = {}
+        
         
         logger.info(f"⚡ Lightning Fast Loader (Ollama-style)")
         logger.info(f"🚀 Using ALL {cpu_count()} CPU cores")
@@ -57,7 +79,10 @@ class LightningFastLoader:
                 for tensor_name in tensor_names:
                     try:
                         # Load tensor directly (keep quantized!)
+                        tensor_load_start = time.time()
                         tensor = f.get_tensor(tensor_name)
+                        tensor_load_time = time.time() - tensor_load_start
+                        logger.info(f"      Tensor {tensor_name} loaded in {tensor_load_time:.2f}s")
                         
                         # Load scale for dequantization
                         scale_name = f"{tensor_name}_scale"
@@ -69,6 +94,8 @@ class LightningFastLoader:
                         
                         # SELECTIVE DEQUANTIZATION: Small weights that need float precision
                         needs_dequantization = self._should_dequantize(tensor_name, tensor.shape)
+                        
+                        original_shape = tensor.shape # Store original shape before any dequantization or conversion
                         
                         if needs_dequantization and scale is not None:
                             # Dequantize small weights (LayerNorm, embeddings, etc.)
@@ -82,14 +109,18 @@ class LightningFastLoader:
                                 logger.info(f"      🔥 Kept quantized {tensor_name} ({scheme}) - shape: {tensor.shape}")
                         
                         # ACTUALLY LOAD TO HARDWARE MEMORY (not just CPU!)
-                        tensor = self._move_to_hardware_memory(tensor, device)
+                        # Pass the class-level vulkan_compute_instance
+                        buffer_info = self._move_to_hardware_memory(tensor, device)
                         
                         file_weights[tensor_name] = {
-                            'tensor': tensor,
+                            'buffer': buffer_info[0],
+                            'memory': buffer_info[1],
+                            'size_bytes': buffer_info[2],
                             'scale': scale,
                             'scheme': scheme,
                             'device': device,
-                            'quantized': quantized_flag
+                            'quantized': quantized_flag,
+                            'original_shape': original_shape # Store original shape
                         }
                         
                         self.device_assignments[tensor_name] = device
@@ -128,27 +159,22 @@ class LightningFastLoader:
             
         return False
     
-    def _move_to_hardware_memory(self, tensor: torch.Tensor, device: str) -> torch.Tensor:
-        """Move tensor to shared memory pool (HMA architecture) - NO GPU allocation errors!"""
-        # For AMD HMA architecture, everything goes to shared DDR5 pool
-        # NPU, iGPU, and CPU all access the same 96GB DDR5-5600 memory
-        try:
-            # Pin memory for fastest hardware access (bypasses normal malloc)
-            pinned_tensor = tensor.pin_memory()
-            size_mb = tensor.numel() * tensor.element_size() / 1024**2
-            
-            if device == 'igpu':
-                logger.info(f"        🎮 HMA→iGPU: {tensor.shape} ({size_mb:.1f}MB)")
-            elif device == 'npu':
-                logger.info(f"        ⚡ HMA→NPU: {tensor.shape} ({size_mb:.1f}MB)")
-            else:
-                logger.info(f"        💾 HMA→CPU: {tensor.shape} ({size_mb:.1f}MB)")
-                
-            return pinned_tensor
-            
-        except Exception as e:
-            logger.warning(f"        ⚠️ Pinned memory failed: {e}, using regular memory")
-            return tensor
+    def _move_to_hardware_memory(self, tensor: torch.Tensor, device: str) -> Tuple[Any, Any, int]:
+        """Move tensor to GPU VRAM/GTT using Vulkan for true hardware allocation"""
+        np_tensor = tensor.numpy() # Convert to numpy for Vulkan
+        
+        
+
+        if device == 'igpu':
+            logger.info(f"        🎮 Allocating {np_tensor.nbytes / (1024*1024):.1f}MB to iGPU (VRAM)")
+            return self.vulkan_compute._allocate_gpu_memory(np_tensor)
+        elif device == 'npu':
+            logger.info(f"        ⚡ Allocating {np_tensor.nbytes / (1024*1024):.1f}MB to NPU (GTT)")
+            return self.vulkan_compute._allocate_gtt_memory(np_tensor)
+        else:
+            logger.info(f"        💾 Keeping {np_tensor.nbytes / (1024*1024):.1f}MB on CPU (Host Memory)")
+            # For CPU, we just return the numpy array, no special Vulkan allocation
+            return (np_tensor, None, np_tensor.nbytes)
     
     def _get_device_assignment(self, tensor_name: str) -> str:
         """Fast device assignment"""
@@ -156,6 +182,8 @@ class LightningFastLoader:
             return 'npu'
         elif any(x in tensor_name for x in ['gate_proj', 'up_proj', 'down_proj']):
             return 'igpu'
+        elif 'embed_tokens' in tensor_name:
+            return 'igpu'  # Put embeddings on GPU for fast lookup
         else:
             return 'cpu'
     
@@ -180,29 +208,22 @@ class LightningFastLoader:
         
         all_weights = {}
         total_size_gb = 0
+        completed = 0
         
-        # Process ALL files in parallel with maximum workers
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_file = {
-                executor.submit(self._memory_map_file, file_path): file_path 
-                for file_path in all_files
-            }
-            
-            completed = 0
-            for future in as_completed(future_to_file):
-                file_path = future_to_file[future]
-                try:
-                    file_weights, file_size_gb = future.result()
-                    all_weights.update(file_weights)
-                    total_size_gb += file_size_gb
-                    completed += 1
-                    
-                    # Progress indicator
-                    progress = completed / len(all_files) * 100
-                    logger.info(f"✅ {file_path.name}: {len(file_weights)} tensors [{progress:.1f}%]")
-                    
-                except Exception as e:
-                    logger.error(f"❌ Failed {file_path.name}: {e}")
+        # Process ALL files sequentially (no parallel processing due to Vulkan context issues)
+        for file_path in all_files:
+            try:
+                file_weights, file_size_gb = self._memory_map_file(file_path)
+                all_weights.update(file_weights)
+                total_size_gb += file_size_gb
+                completed += 1
+                
+                # Progress indicator
+                progress = completed / len(all_files) * 100
+                logger.info(f"✅ {file_path.name}: {len(file_weights)} tensors [{progress:.1f}%]")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed {file_path.name}: {e}")
         
         # Separate shared weights and layers
         shared_weights = {k: v for k, v in all_weights.items() if 'layers.' not in k}
@@ -243,12 +264,14 @@ class LightningFastLoader:
                 if name.startswith(layer_prefix):
                     # Return quantized weights directly (no dequantization)
                     layer_tensors[name] = {
-                        'tensor': weight_info['tensor'],  # Keep quantized!
-                        'scale': weight_info.get('scale'),  # Include scale for runtime
-                        'device': weight_info['device'],
+                        'buffer': weight_info['buffer'],  # Vulkan buffer
+                        'memory': weight_info['memory'],  # Vulkan memory
+                        'size_bytes': weight_info['size_bytes'], # Size in bytes
+                        'scale': weight_info.get('scale'),
                         'scheme': weight_info['scheme'],
-                        'quantized': True,  # Flag for inference engine
-                        'original_shape': weight_info['tensor'].shape
+                        'device': weight_info['device'],
+                        'quantized': True,
+                        'original_shape': weight_info['original_shape'] # Original shape is always stored
                     }
             
             logger.info(f"   ✅ INSTANT ACCESS: Returned {len(layer_tensors)} tensors for layer {layer_num}")
@@ -287,13 +310,28 @@ class LightningFastLoader:
     
     def get_tensor(self, weight_info: Dict[str, Any]) -> torch.Tensor:
         """Get tensor from weight info - compatibility method"""
-        if 'tensor' in weight_info:
+        if 'buffer' in weight_info and weight_info['buffer'] is not None:
+            # It's a GPU-allocated tensor, read it back
+            buffer, memory, size_bytes = weight_info['buffer'], weight_info['memory'], weight_info['size_bytes']
+            original_shape = weight_info['original_shape']
+            scheme = weight_info['scheme']
+
+            # Determine dtype based on scheme for reading back
+            if scheme == 'int8_symmetric' or scheme == 'int8_asymmetric':
+                dtype = np.int8
+            elif scheme == 'int4_grouped':
+                dtype = np.int8 # INT4 is packed into INT8
+            else:
+                dtype = np.float32 # Default to float32 for dequantized or original float
+
+            read_data = self.vulkan_compute._read_buffer(buffer, memory, size_bytes)
+            np_tensor = np.frombuffer(read_data, dtype=dtype).reshape(original_shape)
+            return torch.from_numpy(np_tensor)
+        elif 'tensor' in weight_info:
+            # It's a CPU tensor
             return weight_info['tensor']
-        elif 'quantized' in weight_info and weight_info['quantized']:
-            # Return quantized tensor directly
-            return weight_info.get('tensor', torch.zeros(1))
         else:
-            # Return dequantized if needed
+            # Fallback for other cases, maybe a dequantized tensor was already stored
             tensor = weight_info.get('tensor')
             scale = weight_info.get('scale')
             scheme = weight_info.get('scheme', 'fp16')
@@ -329,7 +367,7 @@ def test_lightning_loader():
     logger.info(f"   Speed: {model_info['hardware_status']['loading_speed_gbps']:.1f} GB/s")
     logger.info(f"   CPU cores: {model_info['hardware_status']['cpu_cores_used']}")
     logger.info(f"   Model size: {model_info['hardware_status']['model_size_gb']:.1f}GB")
-    logger.info(f"   Quantized: {model_info['hardware_status']['quantized_weights']}")
+    logger.info(f"   Quantized: {model_info['hardware_status']['quantized_tensors']}")
     
     # Test instant layer access (no dequantization)
     layer_0 = model_info['layer_loader'](0)

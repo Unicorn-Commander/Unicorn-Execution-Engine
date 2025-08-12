@@ -1,0 +1,84 @@
+#version 450
+
+// Enable FP16 extension for 2x speedup on RDNA3
+#extension GL_EXT_shader_16bit_storage : enable
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : enable
+
+// Numerically stable softmax compute shader
+// Optimized for RDNA3 with shared memory
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Push constants for dimensions
+layout(push_constant) uniform PushConstants {
+    uint N;     // Size of the input vector
+    uint flags; // Bit 0: 0 for FP32, 1 for FP16
+} pc;
+
+// Conditional precision flag
+#define USE_FP16 ((pc.flags & 1u) != 0u)
+
+// FP32 Input/Output buffers
+layout(std430, binding = 0) buffer Data_FP32 {
+    float data_fp32[];
+};
+
+// FP16 Input/Output buffers
+layout(std430, binding = 0) buffer Data_FP16 {
+    float16_t data_fp16[];
+};
+
+// Shared memory for finding the max value and sum of exps
+shared float shared_data[256];
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+
+    // --- Step 1: Find max value in the row (for numerical stability) ---
+    float max_val = -3.402823466e+38; // -FLT_MAX
+    for (uint i = idx; i < pc.N; i += gl_WorkGroupSize.x * gl_NumWorkGroups.x) {
+        max_val = max(max_val, USE_FP16 ? float(data_fp16[i]) : data_fp32[i]);
+    }
+
+    // Reduce max_val across the workgroup
+    shared_data[gl_LocalInvocationID.x] = max_val;
+    barrier();
+
+    for (uint s = gl_WorkGroupSize.x / 2; s > 0; s >>= 1) {
+        if (gl_LocalInvocationID.x < s) {
+            shared_data[gl_LocalInvocationID.x] = max(shared_data[gl_LocalInvocationID.x], shared_data[gl_LocalInvocationID.x + s]);
+        }
+        barrier();
+    }
+    max_val = shared_data[0];
+    barrier();
+
+    // --- Step 2: Calculate sum of exponentials ---
+    float sum_exp = 0.0;
+    for (uint i = idx; i < pc.N; i += gl_WorkGroupSize.x * gl_NumWorkGroups.x) {
+        sum_exp += exp((USE_FP16 ? float(data_fp16[i]) : data_fp32[i]) - max_val);
+    }
+
+    // Reduce sum_exp across the workgroup
+    shared_data[gl_LocalInvocationID.x] = sum_exp;
+    barrier();
+
+    for (uint s = gl_WorkGroupSize.x / 2; s > 0; s >>= 1) {
+        if (gl_LocalInvocationID.x < s) {
+            shared_data[gl_LocalInvocationID.x] += shared_data[gl_LocalInvocationID.x + s];
+        }
+        barrier();
+    }
+    sum_exp = shared_data[0];
+    barrier();
+
+    // --- Step 3: Normalize and write back ---
+    for (uint i = idx; i < pc.N; i += gl_WorkGroupSize.x * gl_NumWorkGroups.x) {
+        float val = (USE_FP16 ? float(data_fp16[i]) : data_fp32[i]) - max_val;
+        if (USE_FP16) {
+            data_fp16[i] = float16_t(exp(val) / sum_exp);
+        } else {
+            data_fp32[i] = exp(val) / sum_exp;
+        }
+    }
+}

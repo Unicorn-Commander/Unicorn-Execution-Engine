@@ -1,6 +1,6 @@
 {
-  "test_timestamp": 1752079561.586914,
-  "test_duration": 5.59426736831665,
+  "test_timestamp": 1752850955.1383364,
+  "test_duration": 4.078363418579102,
   "overall_success_rate": 1.0,
   "total_tests": 6,
   "successful_tests": 6,
@@ -17,8 +17,8 @@
     },
     "model_loading": {
       "loading_success": true,
-      "loading_time": 0.23984980583190918,
-      "active_elastic_params": 33,
+      "loading_time": 0.24671721458435059,
+      "active_elastic_params": 0,
       "loader_state": "ready",
       "success": true
     },
@@ -28,47 +28,47 @@
           "prompt": "What is artificial intelligence?",
           "success": true,
           "tokens_generated": 50,
-          "inference_time": 0.3048224449157715,
-          "tokens_per_second": 164.0299158869879,
-          "elastic_params_active": 33
+          "inference_time": 0.0011539459228515625,
+          "tokens_per_second": 43329.586776859505,
+          "elastic_params_active": 0
         },
         {
           "prompt": "Explain quantum computing in simple terms.",
           "success": true,
           "tokens_generated": 50,
-          "inference_time": 0.30868983268737793,
-          "tokens_per_second": 161.97488451340385,
-          "elastic_params_active": 33
+          "inference_time": 0.0008327960968017578,
+          "tokens_per_second": 60038.70598339536,
+          "elastic_params_active": 0
         },
         {
           "prompt": "Write a short story about a robot.",
           "success": true,
           "tokens_generated": 50,
-          "inference_time": 0.3077354431152344,
-          "tokens_per_second": 162.47722229797571,
-          "elastic_params_active": 60
+          "inference_time": 0.0007369518280029297,
+          "tokens_per_second": 67847.03979294727,
+          "elastic_params_active": 0
         },
         {
           "prompt": "What are the benefits of renewable energy?",
           "success": true,
           "tokens_generated": 50,
-          "inference_time": 0.31165313720703125,
-          "tokens_per_second": 160.434771965042,
-          "elastic_params_active": 60
+          "inference_time": 0.0009882450103759766,
+          "tokens_per_second": 50594.74065138721,
+          "elastic_params_active": 0
         },
         {
           "prompt": "How does machine learning work?",
           "success": true,
           "tokens_generated": 50,
-          "inference_time": 0.29319334030151367,
-          "tokens_per_second": 170.53593355354212,
-          "elastic_params_active": 60
+          "inference_time": 0.000885009765625,
+          "tokens_per_second": 56496.55172413793,
+          "elastic_params_active": 0
         }
       ],
       "successful_tests": 5,
       "failed_tests": 0,
-      "average_tps": 163.89054564339034,
-      "average_inference_time": 0.30521883964538576,
+      "average_tps": 55661.32498574546,
+      "average_inference_time": 0.0009193897247314453,
       "success": true
     },
     "elastic_scaling": {
@@ -133,34 +133,34 @@
           "compression_enabled": true
         },
         "performance_metrics": {
-          "initialization_time": 3.823220729827881,
-          "loading_time": 0.23978662490844727,
+          "initialization_time": 3.8241207599639893,
+          "loading_time": 0.2466576099395752,
           "inference_time": [
-            0.3048224449157715,
-            0.30868983268737793,
-            0.3077354431152344,
-            0.31165313720703125,
-            0.29319334030151367
+            0.0011539459228515625,
+            0.0008327960968017578,
+            0.0007369518280029297,
+            0.0009882450103759766,
+            0.000885009765625
           ],
           "tokens_per_second": [
-            164.0299158869879,
-            161.97488451340385,
-            162.47722229797571,
-            160.434771965042,
-            170.53593355354212
+            43329.586776859505,
+            60038.70598339536,
+            67847.03979294727,
+            50594.74065138721,
+            56496.55172413793
           ],
           "memory_usage": [
-            174587904,
-            174587904,
-            301989888,
-            301989888,
-            301989888
+            150994944,
+            150994944,
+            150994944,
+            150994944,
+            150994944
           ],
           "hardware_utilization": [],
-          "elastic_activation_count": 60,
+          "elastic_activation_count": 0,
           "cache_hit_rate": 0.0
         },
-        "active_elastic_params": 60,
+        "active_elastic_params": 0,
         "components": {
           "quantizer": true,
           "allocator": true,
@@ -173,10 +173,10 @@
           "devices": {
             "npu_phoenix": {
               "total_size": 21474836480,
-              "allocated_size": 259522557,
-              "free_size": 21215313923,
-              "utilization": 0.012084960797801613,
-              "active_blocks": 56,
+              "allocated_size": 108527613,
+              "free_size": 21366308867,
+              "utilization": 0.005053710797801614,
+              "active_blocks": 24,
               "regions": 1
             },
             "radeon_780m": {
@@ -197,59 +197,59 @@
             }
           },
           "allocation_stats": {
-            "total_allocated": 259522557,
-            "peak_allocation": 301989888,
-            "allocation_count": 64,
+            "total_allocated": 108527613,
+            "peak_allocation": 150994944,
+            "allocation_count": 32,
             "deallocation_count": 8,
-            "active_regions": 56
+            "active_regions": 24
           },
           "performance_metrics": {
-            "avg_allocation_time": 4.045665264129639e-06,
+            "avg_allocation_time": 3.5837292671203613e-06,
             "avg_transfer_time": 0,
             "avg_bandwidth_utilization": 0
           },
           "elastic_blocks": {
             "total": 168,
-            "active": 51,
+            "active": 19,
             "compressed": 5,
-            "inactive": 112
+            "inactive": 144
           }
         }
       },
       "components_active": 6,
       "memory_status": {
-        "total_allocated": 259522557,
-        "peak_allocation": 301989888,
-        "allocation_count": 64,
+        "total_allocated": 108527613,
+        "peak_allocation": 150994944,
+        "allocation_count": 32,
         "deallocation_count": 8,
-        "active_regions": 56
+        "active_regions": 24
       },
       "performance_metrics": {
-        "initialization_time": 3.823220729827881,
-        "loading_time": 0.23978662490844727,
+        "initialization_time": 3.8241207599639893,
+        "loading_time": 0.2466576099395752,
         "inference_time": [
-          0.3048224449157715,
-          0.30868983268737793,
-          0.3077354431152344,
-          0.31165313720703125,
-          0.29319334030151367
+          0.0011539459228515625,
+          0.0008327960968017578,
+          0.0007369518280029297,
+          0.0009882450103759766,
+          0.000885009765625
         ],
         "tokens_per_second": [
-          164.0299158869879,
-          161.97488451340385,
-          162.47722229797571,
-          160.434771965042,
-          170.53593355354212
+          43329.586776859505,
+          60038.70598339536,
+          67847.03979294727,
+          50594.74065138721,
+          56496.55172413793
         ],
         "memory_usage": [
-          174587904,
-          174587904,
-          301989888,
-          301989888,
-          301989888
+          150994944,
+          150994944,
+          150994944,
+          150994944,
+          150994944
         ],
         "hardware_utilization": [],
-        "elastic_activation_count": 60,
+        "elastic_activation_count": 0,
         "cache_hit_rate": 0.0
       },
       "success": true
@@ -262,9 +262,9 @@
         "system_cpu"
       ],
       "elastic_blocks": 168,
-      "active_blocks": 51,
-      "total_memory": 259522557,
-      "allocated_memory": 259522557,
+      "active_blocks": 19,
+      "total_memory": 108527613,
+      "allocated_memory": 108527613,
       "success": true
     }
   }

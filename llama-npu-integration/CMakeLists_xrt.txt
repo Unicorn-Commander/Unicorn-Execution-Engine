@@ -1,0 +1,140 @@
+# NPU Backend for llama.cpp with Real Kernel Support
+cmake_minimum_required(VERSION 3.15)
+project(ggml_npu CXX C)
+
+# C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Options
+option(GGML_NPU_BUILD_TESTS "Build NPU backend tests" ON)
+option(GGML_NPU_VERBOSE "Enable verbose NPU logging" ON)
+option(GGML_NPU_USE_REAL_KERNELS "Use real NPU kernels (requires XRT)" ON)
+
+# Find dependencies
+find_package(Threads REQUIRED)
+
+# Find XRT
+set(XRT_ROOT "/opt/xilinx/xrt" CACHE PATH "XRT installation root")
+find_path(XRT_INCLUDE_DIR 
+    NAMES xrt/xrt_device.h
+    HINTS ${XRT_ROOT}/include
+    REQUIRED
+)
+find_library(XRT_CORE_LIBRARY
+    NAMES xrt_core
+    HINTS ${XRT_ROOT}/lib
+    REQUIRED
+)
+find_library(XRT_COREUTIL_LIBRARY
+    NAMES xrt_coreutil
+    HINTS ${XRT_ROOT}/lib
+    REQUIRED
+)
+
+if(NOT XRT_INCLUDE_DIR OR NOT XRT_CORE_LIBRARY)
+    message(FATAL_ERROR "XRT not found. Please install XRT or set XRT_ROOT")
+endif()
+
+message(STATUS "Found XRT:")
+message(STATUS "  Include: ${XRT_INCLUDE_DIR}")
+message(STATUS "  Libraries: ${XRT_CORE_LIBRARY}, ${XRT_COREUTIL_LIBRARY}")
+
+# NPU backend library
+add_library(ggml-npu STATIC
+    npu_kernel_loader.cpp
+    npu_backend_real.cpp
+    ggml_npu_backend.cpp
+    npu_vulkan_bridge.cpp
+)
+
+# Include directories
+target_include_directories(ggml-npu PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${XRT_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../llama.cpp  # For GGML headers
+)
+
+# Compile definitions
+target_compile_definitions(ggml-npu PRIVATE
+    $<$<BOOL:${GGML_NPU_VERBOSE}>:NPU_VERBOSE=1>
+    $<$<BOOL:${GGML_NPU_USE_REAL_KERNELS}>:USE_REAL_NPU_KERNELS=1>
+)
+
+# Link libraries
+target_link_libraries(ggml-npu
+    PUBLIC
+        Threads::Threads
+        ${XRT_CORE_LIBRARY}
+        ${XRT_COREUTIL_LIBRARY}
+        ${CMAKE_DL_LIBS}
+        stdc++fs  # For filesystem
+)
+
+# Set RPATH for finding XRT libraries
+set_target_properties(ggml-npu PROPERTIES
+    INSTALL_RPATH "${XRT_ROOT}/lib"
+    BUILD_WITH_INSTALL_RPATH TRUE
+)
+
+# Tests
+if(GGML_NPU_BUILD_TESTS)
+    # Test NPU backend
+    add_executable(test-npu test_npu_backend.cpp)
+    target_link_libraries(test-npu PRIVATE ggml-npu m)
+    set_target_properties(test-npu PROPERTIES
+        INSTALL_RPATH "${XRT_ROOT}/lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+    
+    # Benchmark NPU
+    add_executable(benchmark-npu benchmark_npu.cpp)
+    target_link_libraries(benchmark-npu PRIVATE ggml-npu m)
+    set_target_properties(benchmark-npu PROPERTIES
+        INSTALL_RPATH "${XRT_ROOT}/lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+    
+    # Test real kernels
+    add_executable(test-real-kernels test_real_kernels.cpp)
+    target_link_libraries(test-real-kernels PRIVATE ggml-npu m)
+    set_target_properties(test-real-kernels PROPERTIES
+        INSTALL_RPATH "${XRT_ROOT}/lib"
+        BUILD_WITH_INSTALL_RPATH TRUE
+    )
+endif()
+
+# Integration helper for llama.cpp
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/integrate_llama.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/integrate_llama.cmake
+    @ONLY
+)
+
+# Copy kernel files for testing
+file(GLOB KERNEL_FILES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/../npu_kernels_gemma3_4b/*.xclbin"
+)
+foreach(kernel_file ${KERNEL_FILES})
+    configure_file(${kernel_file} ${CMAKE_CURRENT_BINARY_DIR} COPYONLY)
+endforeach()
+
+# Export configuration
+install(TARGETS ggml-npu
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+install(FILES
+    ggml_npu_backend.h
+    npu_backend.h
+    npu_kernel_loader.h
+    DESTINATION include/ggml
+)
+
+# Status messages
+message(STATUS "NPU Backend Configuration:")
+message(STATUS "  Real kernels: ${GGML_NPU_USE_REAL_KERNELS}")
+message(STATUS "  Verbose logging: ${GGML_NPU_VERBOSE}")
+message(STATUS "  Build tests: ${GGML_NPU_BUILD_TESTS}")
+message(STATUS "  Kernel directory: ${CMAKE_CURRENT_SOURCE_DIR}/../npu_kernels_gemma3_4b/")

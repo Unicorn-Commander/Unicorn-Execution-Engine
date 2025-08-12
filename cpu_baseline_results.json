@@ -1,0 +1,41 @@
+{
+  "matrix_benchmarks": {
+    "4B Attention": {
+      "time_ms": 2.647852897644043,
+      "gflops": 633.6158634389288,
+      "bandwidth_gbs": 10.142356765322937,
+      "cpu_usage": 63.6
+    },
+    "27B Attention": {
+      "time_ms": 13.895320892333984,
+      "gflops": 391.1977295176341,
+      "bandwidth_gbs": 6.008935986218541,
+      "cpu_usage": 66.7
+    },
+    "4B MLP": {
+      "time_ms": 9.614849090576172,
+      "gflops": 697.9710588050268,
+      "bandwidth_gbs": 10.791616659558219,
+      "cpu_usage": 62.4
+    },
+    "27B MLP": {
+      "time_ms": 39.699769020080566,
+      "gflops": 547.6926559699131,
+      "bandwidth_gbs": 8.246712416875809,
+      "cpu_usage": 80.0
+    }
+  },
+  "model_estimates": {
+    "4B": {
+      "layer_time_ms": 34.821109771728516,
+      "full_model_time_ms": 974.9910736083984,
+      "estimated_tps": 5.128252078755166
+    },
+    "27B": {
+      "layer_time_ms": 139.98082160949707,
+      "full_model_time_ms": 4479.386291503906,
+      "estimated_tps": 1.1162243384732293
+    }
+  },
+  "timestamp": 1752909501.8068225
+}

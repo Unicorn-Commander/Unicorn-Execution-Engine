@@ -1,0 +1,9 @@
+NPU + Vulkan Benchmark Results
+========================================
+
+{'name': 'Small (2B)', 'seq_len': 128, 'success': False, 'error': 'NPU attention mandatory but failed: No kernels found in XCLBIN'}
+
+{'name': 'Medium (7B)', 'seq_len': 256, 'success': False, 'error': 'NPU attention mandatory but failed: No kernels found in XCLBIN'}
+
+{'name': 'Large (7B-long)', 'seq_len': 512, 'success': False, 'error': 'NPU attention mandatory but failed: No kernels found in XCLBIN'}
+

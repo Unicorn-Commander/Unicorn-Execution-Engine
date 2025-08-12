@@ -1,0 +1,32 @@
+#!/bin/bash
+# Wrapper to ensure XRT libraries are loaded
+
+# Set XRT environment
+export LD_LIBRARY_PATH=/opt/xilinx/xrt/lib:$LD_LIBRARY_PATH
+export XRT_HACK_UNSECURE_LOADING_XCLBIN=1
+
+# Find the actual llama-cli binary
+LLAMA_CLI=""
+
+# Check common locations
+if [ -f "./llama.cpp/build/bin/llama-cli" ]; then
+    LLAMA_CLI="./llama.cpp/build/bin/llama-cli"
+elif [ -f "./build/bin/llama-cli" ]; then
+    LLAMA_CLI="./build/bin/llama-cli"
+else
+    # Search for it
+    LLAMA_CLI=$(find . -name "llama-cli" -type f -executable | grep -v wrapper | head -1)
+fi
+
+if [ -z "$LLAMA_CLI" ]; then
+    echo "❌ Could not find llama-cli binary"
+    exit 1
+fi
+
+echo "🚀 Running with XRT NPU support enabled"
+echo "   Binary: $LLAMA_CLI"
+echo "   XRT libs: $LD_LIBRARY_PATH"
+echo ""
+
+# Run with XRT libraries preloaded
+LD_PRELOAD="/opt/xilinx/xrt/lib/libxrt_core.so:/opt/xilinx/xrt/lib/libxrt++.so" exec "$LLAMA_CLI" "$@"

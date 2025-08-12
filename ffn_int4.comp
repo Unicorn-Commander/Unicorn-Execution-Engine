@@ -1,0 +1,75 @@
+#version 450
+#extension GL_KHR_shader_subgroup_wave32 : enable
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(binding = 0) buffer readonly Input { float input_data[]; };
+layout(binding = 1) buffer readonly GateWeights { uint gate_weights[]; };
+layout(binding = 2) buffer readonly UpWeights { uint up_weights[]; };
+layout(binding = 3) buffer readonly DownWeights { uint down_weights[]; };
+layout(binding = 4) buffer writeonly Output { float output_data[]; };
+
+layout(push_constant) uniform PushConstants {
+    float gate_scale;
+    int gate_zero_point;
+    float up_scale;
+    int up_zero_point;
+    float down_scale;
+    int down_zero_point;
+    uint hidden_size;
+    uint intermediate_size;
+};
+
+void main() {
+    uint row = gl_GlobalInvocationID.x;
+
+    if (row >= hidden_size) {
+        return;
+    }
+
+    // Gate projection
+    float gate_proj = 0.0;
+    for (uint k = 0; k < hidden_size; ++k) {
+        uint gate_packed_index = (k * intermediate_size + row) / 2;
+        uint gate_packed_value = gate_weights[gate_packed_index];
+        float gate_val;
+        if ((k * intermediate_size + row) % 2 == 0) {
+            gate_val = float(gate_packed_value & 0xF);
+        } else {
+            gate_val = float((gate_packed_value >> 4) & 0xF);
+        }
+        gate_proj += input_data[k] * ((gate_val - float(gate_zero_point)) * gate_scale);
+    }
+
+    // Up projection
+    float up_proj = 0.0;
+    for (uint k = 0; k < hidden_size; ++k) {
+        uint up_packed_index = (k * intermediate_size + row) / 2;
+        uint up_packed_value = up_weights[up_packed_index];
+        float up_val;
+        if ((k * intermediate_size + row) % 2 == 0) {
+            up_val = float(up_packed_value & 0xF);
+        } else {
+            up_val = float((up_packed_value >> 4) & 0xF);
+        }
+        up_proj += input_data[k] * ((up_val - float(up_zero_point)) * up_scale);
+    }
+
+    // SiLU and element-wise multiply
+    float intermediate_val = gate_proj * (1.0 / (1.0 + exp(-gate_proj))) * up_proj;
+
+    // Down projection
+    float down_proj = 0.0;
+    for (uint k = 0; k < intermediate_size; ++k) {
+        uint down_packed_index = (k * hidden_size + row) / 2;
+        uint down_packed_value = down_weights[down_packed_index];
+        float down_val;
+        if ((k * hidden_size + row) % 2 == 0) {
+            down_val = float(down_packed_value & 0xF);
+        } else {
+            down_val = float((down_packed_value >> 4) & 0xF);
+        }
+        down_proj += intermediate_val * ((down_val - float(down_zero_point)) * down_scale);
+    }
+
+    output_data[row] = down_proj;
+}
