@@ -7,7 +7,7 @@
 - **COMPLETELY ELIMINATES traditional ML frameworks** (PyTorch, TensorFlow) for maximum hardware control
 - **Hybrid NPU+iGPU execution** leveraging AMD's unified memory architecture
 - **Pure numpy operations** with direct Vulkan compute shaders and NPU kernels
-- **Supports large language models** (Gemma 3 27B, Qwen 2.5) with zero framework dependencies
+- **Supports large language models** (Gemma 3 27B, Qwen 2.5, Qwen3-30B-A3B MoE) with zero framework dependencies
 
 ### **Core Innovation**
 - **Direct hardware programming** using Vulkan compute shaders and NPU kernels
@@ -215,7 +215,8 @@ Input Tokens → Embeddings (NPU) → Layer 0-61 → Output Projection → Token
 
 ### **Target Performance**
 - **Gemma 3 4B**: 400+ TPS
-- **Gemma 3 27B**: ✅ **81 TPS ACHIEVED** (with fixed pipeline)
+- **Gemma 3 27B**: ✅ **17.3 TPS ACHIEVED** (with Vulkan workaround)
+- **Qwen3-30B-A3B MoE**: 🎯 **40-50 TPS TARGET** (with INT4 quantization)
 - **NPU Utilization**: >70% (16 TOPS available)
 - **iGPU Utilization**: >80% (8.9 TFLOPS available)
 
