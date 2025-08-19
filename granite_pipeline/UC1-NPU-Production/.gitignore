@@ -1,0 +1,32 @@
+# Exclude large model files
+models/qwen3-0.6b-original/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+
+# Keep structure but exclude large files
+!models/qwen3-0.6b-original/.gitkeep
+!models/quantization/
+!models/README.md
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

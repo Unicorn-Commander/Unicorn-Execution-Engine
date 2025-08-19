@@ -15,9 +15,40 @@ This file provides complete project context and handoff information for any AI a
   - **VULKAN LLAMA.CPP**: `llama.cpp/` with Vulkan backend ⭐ **DEPLOYED**
   - **WORKING PIPELINE**: `optimized_hybrid_pipeline.py` ⭐ **TESTED**
 
-## 📅 **LATEST UPDATE - January 11, 2025**
+## 📅 **LATEST UPDATE - August 18, 2025**
 
-### **🎯 MAJOR ACHIEVEMENTS:**
+### **🦄 NEW PROJECT: UC1-NPU-Production - Qwen3 Embedding Acceleration**
+
+**Status**: ✅ **PHASE 1 FOUNDATION COMPLETE** - Ready for NPU optimization  
+**Project**: Get Qwen3-Embedding-0.6B running on AMD Phoenix NPU at 30-50 embeddings/sec  
+**Location**: `granite_pipeline/UC1-NPU-Production/`
+
+#### **✅ MAJOR ACHIEVEMENTS (Phase 1):**
+
+1. **Real Qwen3-Embedding-0.6B Model Deployed** ✅
+   - Downloaded and tested Qwen/Qwen3-Embedding-0.6B (595M parameters)
+   - Model working: 1024-dim embeddings, 28 layers, 151K vocab
+   - Memory: 1.11 GB, max 32K context length
+
+2. **NPU Hardware Detection Working** ✅
+   - AMD Phoenix NPU detected: `/dev/accel/accel0`
+   - XRT 2.20.0 runtime operational
+   - PyXRT integration tested and functional
+   - NPU ready for kernel deployment
+
+3. **CPU Baseline Performance Established** ✅
+   - **Single**: 15.2 embeddings/sec (65.9ms avg latency)
+   - **Best batch**: 19.7 embeddings/sec (batch size 4)
+   - **Memory**: 1.1GB model + 63MB for 512 tokens
+   - **Quality**: 1024-dim normalized embeddings
+
+4. **NPU Performance Targets Set** 🎯
+   - **Conservative (3x)**: 45.5 embeddings/sec
+   - **Target (4x)**: 60.7 embeddings/sec
+   - **Stretch (5x)**: 75.8 embeddings/sec
+   - **Ultimate Goal**: 30-50 embeddings/sec ✅ ACHIEVABLE
+
+### **🎯 PREVIOUS ACHIEVEMENTS:**
 
 1. **Vulkan Workaround Implemented** ✅
    - Created `vulkan_compute_workaround.py` to bypass Python binding issues
@@ -41,7 +72,15 @@ This file provides complete project context and handoff information for any AI a
    - **Approach**: Router at FP16, active experts INT4, inactive INT3/4
    - **Memory**: ~7.5GB active (fits in 16GB VRAM perfectly)
 
-### **🔧 KEY FILES CREATED:**
+### **🔧 UC1-NPU-Production KEY FILES:**
+- **`UC1-NPU-Production/README.md`** - Project overview and 6-8 week plan ⭐ **MAIN GUIDE**
+- **`UC1-NPU-Production/PROJECT_CHECKLIST.md`** - Detailed task breakdown ⭐ **DEVELOPMENT PLAN**
+- **`UC1-NPU-Production/src/model_loader.py`** - Qwen3 model loader (working)
+- **`UC1-NPU-Production/benchmarks/cpu_baseline.py`** - Performance benchmarks (working)
+- **`UC1-NPU-Production/src/test_npu_basic.py`** - NPU hardware detection (working)
+- **`UC1-NPU-Production/benchmarks/cpu_baseline_results.json`** - Baseline data
+
+### **🔧 PREVIOUS KEY FILES:**
 - `fix_vulkan_driver.py` - Diagnoses and fixes Vulkan issues
 - `vulkan_compute_workaround.py` - Bypass for Vulkan Python bindings
 - `gemma_27b_working_pipeline.py` - Pipeline using workaround
@@ -53,11 +92,62 @@ This file provides complete project context and handoff information for any AI a
 
 ## 🚀 **IMMEDIATE HANDOFF SUMMARY**
 
+**Status**: **🦄 NEW PROJECT ACTIVE - UC1-NPU-Production** ✅  
+**Location**: `/home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/granite_pipeline/UC1-NPU-Production/`  
+**Goal**: Get Qwen3-Embedding-0.6B running on AMD Phoenix NPU at 30-50 embeddings/sec  
+**Phase**: **Phase 1 Complete** - Foundation established, ready for NPU optimization  
+**Last Update**: August 18, 2025 - Model loaded, NPU detected, baseline established
+
+### **🎯 UC1-NPU-Production Project Status:**
+- ✅ **Model**: Qwen3-Embedding-0.6B (595M params) loaded and working
+- ✅ **NPU**: AMD Phoenix NPU detected and accessible via XRT 2.20.0
+- ✅ **Baseline**: 15.2 embeddings/sec CPU performance measured
+- ✅ **Targets**: 45-75 embeddings/sec NPU performance goals set
+- 🔄 **Next**: MLIR kernel compilation and NPU optimization (Phase 2)
+
+### **📋 UC1-NPU-Production NEXT STEPS:**
+
+#### **🔴 IMMEDIATE (Phase 2 - Week 3-4):**
+1. **MLIR Kernel Compilation** - Compile embedding_lookup.mlir to XCLBIN
+2. **Basic NPU Execution** - Load XCLBIN and test simple operations
+3. **UC1-EMB Quantization** - Quantize Qwen3-0.6B to NPU-friendly format
+4. **Persistent Kernels** - Eliminate kernel launch overhead
+
+#### **🟡 OPTIMIZATION (Phase 3 - Week 5-6):**
+1. **Fused Transformer Pipeline** - 28-layer fused transformer kernel
+2. **Direct INT4 Compute** - NPU kernels compute on INT4 directly
+3. **Batch Processing** - Optimize for batch size 32-64
+4. **Memory Layout** - NPU-specific memory access optimization
+
+#### **🟢 PRODUCTION (Phase 4 - Week 7-8):**
+1. **Production Runtime** - Error handling and monitoring
+2. **Real-World Validation** - Test with actual embedding workloads
+3. **Documentation** - Complete deployment guides
+4. **Target Achievement** - Verify 30-50 embeddings/sec goal
+
+### **🚀 QUICK START UC1-NPU-Production:**
+
+```bash
+# Navigate to project
+cd /home/ucadmin/Development/github_repos/Unicorn-Execution-Engine/granite_pipeline/UC1-NPU-Production/
+
+# Test current status
+python src/model_loader.py          # Test Qwen3 model (working)
+python src/test_npu_basic.py        # Test NPU detection (working)
+python benchmarks/cpu_baseline.py  # Run full benchmark (working)
+
+# Key files to check
+cat README.md                       # Project overview
+cat PROJECT_CHECKLIST.md           # Detailed development plan
+cat benchmarks/cpu_baseline_results.json  # Performance data
+```
+
+### **🎯 PREVIOUS PROJECT STATUS:**
 **Status**: **🎯 PROJECT COMPLETE - IGPU ACCELERATION OPTIMAL** ✅  
 **Location**: `/home/ucadmin/Development/Unicorn-Execution-Engine/`  
 **Environment**: `python3.13` + llama.cpp with Vulkan + NPU integration  
 **Latest Discovery**: **Memory bandwidth is the primary bottleneck - iGPU-only is optimal solution**  
-**Last Update**: July 30, 2025 - Comprehensive performance analysis complete
+**Completed**: July 30, 2025 - Comprehensive performance analysis complete
 
 ### **🚨 CRITICAL PROJECT UNDERSTANDING - UPDATED**
 

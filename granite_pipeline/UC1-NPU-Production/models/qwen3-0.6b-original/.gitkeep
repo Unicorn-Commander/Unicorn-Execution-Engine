@@ -1,0 +1,10 @@
+# This directory will contain the Qwen3-Embedding-0.6B model
+# Model will be downloaded automatically by model_loader.py
+# Files are excluded from git due to size (2.25 GB total)
+
+# To download the model:
+# python src/model_loader.py
+
+# Or manually:
+# from huggingface_hub import snapshot_download
+# snapshot_download(repo_id="Qwen/Qwen3-Embedding-0.6B", cache_dir="./")
