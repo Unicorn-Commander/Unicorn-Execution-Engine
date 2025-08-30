@@ -1,0 +1,4 @@
+[console_scripts]
+unicorn-benchmark = unicorn_engine.benchmark:main
+unicorn-convert = unicorn_engine.converter:main
+unicorn-engine = unicorn_engine.cli:main

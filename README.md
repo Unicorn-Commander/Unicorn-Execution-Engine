@@ -1,0 +1,199 @@
+# Unicorn Execution Engine
+
+**Custom Runtime & Kernels for Hardware-Accelerated AI**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![NPU Models](https://img.shields.io/badge/Models-HuggingFace-ff9800)](https://huggingface.co/magicunicorn)
+[![Performance](https://img.shields.io/badge/Speedup-220x-brightgreen)](https://github.com/Unicorn-Commander/Unicorn-Execution-Engine)
+
+## 🚀 Overview
+
+The Unicorn Execution Engine is a high-performance runtime for deploying quantized AI models on specialized hardware accelerators, particularly AMD NPUs. Developed by Magic Unicorn Inc. as part of the Unicorn Commander Suite, this engine achieves unprecedented performance through custom MLIR-AIE2 kernels and INT8 quantization.
+
+## ✨ Key Features
+
+- **220x Speedup** on AMD Phoenix NPU vs CPU
+- **Custom MLIR-AIE2 Kernels** for optimal hardware utilization
+- **INT8/INT4 Quantization** with minimal accuracy loss
+- **Zero-Copy Memory** architecture
+- **Async Pipeline Execution** for maximum throughput
+- **Python & C++ APIs** for easy integration
+
+## 📊 Performance Benchmarks
+
+### WhisperX Speech Recognition
+| Model | CPU Time | NPU Time | Speedup | Accuracy |
+|-------|----------|----------|---------|----------|
+| Large-v3 | 59.4 min | 16.2 sec | **220x** | 99% |
+| Large-v2 | 54.0 min | 18.0 sec | **180x** | 98% |
+| Medium | 27.0 min | 14.4 sec | **112x** | 95% |
+
+*Benchmark: 1 hour of audio transcription*
+
+## 🛠️ Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/Unicorn-Commander/Unicorn-Execution-Engine
+cd Unicorn-Execution-Engine
+
+# Install dependencies
+./install.sh
+
+# Verify NPU availability
+python -c "from unicorn_engine import NPUAccelerator; print(NPUAccelerator.is_available())"
+```
+
+### Basic Usage
+
+```python
+from unicorn_engine import NPUWhisperX
+
+# Load quantized model from Hugging Face
+model = NPUWhisperX.from_pretrained("magicunicorn/whisperx-large-v3-npu")
+
+# Transcribe audio with hardware acceleration
+result = model.transcribe("meeting.wav")
+print(result["text"])
+```
+
+## 📦 Pre-Quantized Models
+
+We provide pre-quantized models optimized for NPU acceleration on [Hugging Face](https://huggingface.co/magicunicorn):
+
+- [whisperx-large-v3-npu](https://huggingface.co/magicunicorn/whisperx-large-v3-npu) - 99% accuracy, 220x speedup
+- [whisperx-large-v2-npu](https://huggingface.co/magicunicorn/whisperx-large-v2-npu) - 98% accuracy, 180x speedup
+- [whisperx-medium-npu](https://huggingface.co/magicunicorn/whisperx-medium-npu) - 95% accuracy, 112x speedup
+- [whisperx-small-npu](https://huggingface.co/magicunicorn/whisperx-small-npu) - 92% accuracy, 75x speedup
+- [whisperx-base-npu](https://huggingface.co/magicunicorn/whisperx-base-npu) - 88% accuracy, 56x speedup
+
+## 🏗️ Architecture
+
+### Software Stack
+```
+┌─────────────────────────────────────┐
+│        Python API Layer             │
+├─────────────────────────────────────┤
+│     Unicorn Execution Engine        │
+│         (C++ Runtime)               │
+├─────────────────────────────────────┤
+│      MLIR-AIE2 Compiler             │
+├─────────────────────────────────────┤
+│       NPU Driver (Kernel)           │
+├─────────────────────────────────────┤
+│   AMD Phoenix NPU (16 TOPS INT8)    │
+└─────────────────────────────────────┘
+```
+
+### Custom Kernels
+
+Our MLIR-AIE2 kernels are specifically optimized for the AMD AIE architecture:
+
+```mlir
+// Example: Vectorized INT8 Attention
+aie.core(%tile) {
+  %q = aie.load_vector %query[%i] : vector<32xi8>
+  %k = aie.load_vector %key[%i] : vector<32xi8>
+  
+  // 32 INT8 MAC operations in parallel
+  %scores = aie.mac %q, %k : vector<32xi8> -> vector<32xi32>
+  
+  // Quantized softmax with lookup table
+  %output = aie.lookup %scores, %exp_lut : vector<32xi8>
+  
+  aie.store_vector %output, %result[%i]
+}
+```
+
+## 🔧 Advanced Features
+
+### Pipeline Parallelism
+```python
+# Process multiple audio streams concurrently
+engine = UnicornEngine(pipeline_mode=True)
+
+streams = ["audio1.wav", "audio2.wav", "audio3.wav"]
+results = await engine.process_batch(streams)
+```
+
+### Custom Quantization
+```python
+# Quantize your own models
+from unicorn_engine import Quantizer
+
+quantizer = Quantizer(target="npu", precision="int8")
+quantized_model = quantizer.quantize(
+    model="openai/whisper-large-v3",
+    calibration_data="librispeech_100h"
+)
+```
+
+### Memory Optimization
+```python
+# Zero-copy memory for large batches
+with engine.zero_copy_mode():
+    results = engine.process_large_batch(audio_files)
+```
+
+## 📚 Documentation
+
+- [Technical Documentation](./docs/TECHNICAL.md) - Detailed architecture and implementation
+- [API Reference](./docs/API.md) - Complete API documentation
+- [Kernel Development](./docs/KERNELS.md) - Guide to writing custom MLIR kernels
+- [Benchmarks](./docs/BENCHMARKS.md) - Comprehensive performance analysis
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+```bash
+# Setup development environment
+./dev_setup.sh
+
+# Run tests
+pytest tests/
+
+# Build documentation
+make docs
+```
+
+## 📈 Roadmap
+
+- [ ] Support for additional NPU architectures (Qualcomm, MediaTek)
+- [ ] INT4 quantization for even smaller models
+- [ ] ONNX export for broader compatibility
+- [ ] Dynamic quantization based on hardware capabilities
+- [ ] Multi-NPU distribution for larger models
+
+## 🏢 About Magic Unicorn Inc.
+
+Magic Unicorn Inc. develops enterprise AI solutions optimized for edge deployment. The Unicorn Commander Suite provides complete AI infrastructure for on-premise deployments.
+
+### Other Projects
+- [Meeting-Ops](https://github.com/Unicorn-Commander/Meeting-Ops) - AI-powered meeting recording appliance
+- [Unicorn Models](https://huggingface.co/magicunicorn) - Pre-quantized models for edge deployment
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- AMD for NPU hardware and MLIR-AIE2 support
+- OpenAI for the original Whisper models
+- The open-source community for testing and feedback
+
+## 📞 Contact
+
+- **GitHub Issues**: [Report bugs or request features](https://github.com/Unicorn-Commander/Unicorn-Execution-Engine/issues)
+- **Hugging Face**: [Discussion forum](https://huggingface.co/magicunicorn)
+- **Email**: support@magicunicorn.dev
+
+---
+
+**© 2025 Magic Unicorn Inc.** | Part of the Unicorn Commander Suite
+
+⭐ Star us on GitHub if you find this useful!
