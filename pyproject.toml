@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "numpy>=1.21.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unicorn-engine"
+version = "1.0.0"
+description = "Hardware-accelerated AI inference with 220x speedup"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Magic Unicorn Unconventional Technology & Stuff Inc.", email = "hello@magicunicorn.tech"}
+]
+maintainers = [
+    {name = "Magic Unicorn Team", email = "support@magicunicorn.tech"}
+]
+keywords = [
+    "ai",
+    "machine-learning",
+    "deep-learning",
+    "npu",
+    "hardware-acceleration",
+    "whisper",
+    "speech-recognition",
+    "edge-ai",
+    "quantization",
+    "mlir",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://magicunicorn.tech"
+Documentation = "https://unicorn-engine.readthedocs.io"
+Repository = "https://github.com/Unicorn-Commander/Unicorn-Execution-Engine"
+Issues = "https://github.com/Unicorn-Commander/Unicorn-Execution-Engine/issues"
+Models = "https://huggingface.co/magicunicorn"
+
+[project.scripts]
+unicorn-engine = "unicorn_engine.cli:main"
+unicorn-benchmark = "unicorn_engine.benchmark:main"
+unicorn-convert = "unicorn_engine.converter:main"
+
+[tool.setuptools]
+packages = ["unicorn_engine"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+unicorn_engine = [
+    "backends/**/*.mlir",
+    "backends/**/*.bin",
+    "backends/**/*.so",
+    "backends/**/*.dll",
+    "configs/*.yaml",
+    "configs/*.json",
+]

@@ -1,5 +1,25 @@
+# Git LFS tracking for large files
 *.onnx filter=lfs diff=lfs merge=lfs -text
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.whl filter=lfs diff=lfs merge=lfs -text
 *.so filter=lfs diff=lfs merge=lfs -text
 *.dll filter=lfs diff=lfs merge=lfs -text
+*.dylib filter=lfs diff=lfs merge=lfs -text
+*.npumodel filter=lfs diff=lfs merge=lfs -text
+*.xclbin filter=lfs diff=lfs merge=lfs -text
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+
+# NPU binaries
+backends/amd_npu/kernels/*.bin filter=lfs diff=lfs merge=lfs -text
+backends/amd_npu/kernels/*.xclbin filter=lfs diff=lfs merge=lfs -text
+
+# Prebuilt wheels
+dist/*.whl filter=lfs diff=lfs merge=lfs -text
+wheels/*.whl filter=lfs diff=lfs merge=lfs -text
+
+# Documentation images
+docs/images/*.png filter=lfs diff=lfs merge=lfs -text
+docs/images/*.jpg filter=lfs diff=lfs merge=lfs -text
+dist/*.tar.gz filter=lfs diff=lfs merge=lfs -text
